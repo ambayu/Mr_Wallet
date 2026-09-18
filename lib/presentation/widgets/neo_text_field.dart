@@ -6,6 +6,7 @@ class NeoTextField extends StatelessWidget {
   final String? labelText;
   final String? hintText;
   final TextInputType keyboardType;
+  final bool obscureText;
   final IconData? prefixIcon;
   final Widget? suffixIcon;
   final int maxLines;
@@ -19,6 +20,7 @@ class NeoTextField extends StatelessWidget {
     this.labelText,
     this.hintText,
     this.keyboardType = TextInputType.text,
+    this.obscureText = false,
     this.prefixIcon,
     this.suffixIcon,
     this.maxLines = 1,
@@ -46,12 +48,12 @@ class NeoTextField extends StatelessWidget {
         Container(
           decoration: BoxDecoration(
             color: backgroundColor,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.borderBlack, width: 2.2),
+            borderRadius: BorderRadius.circular(18),
+            border: Border.all(color: AppColors.borderBlack, width: 1.8),
             boxShadow: const [
               BoxShadow(
                 color: AppColors.shadowBlack,
-                offset: Offset(2.5, 3),
+                offset: Offset(2, 2.5),
                 blurRadius: 0,
               ),
             ],
@@ -59,11 +61,12 @@ class NeoTextField extends StatelessWidget {
           child: TextFormField(
             controller: controller,
             keyboardType: keyboardType,
+            obscureText: obscureText,
             maxLines: maxLines,
             onChanged: onChanged,
             validator: validator,
             style: const TextStyle(
-              fontSize: 15,
+              fontSize: 14,
               fontWeight: FontWeight.w700,
               color: AppColors.textBlack,
             ),
@@ -72,9 +75,10 @@ class NeoTextField extends StatelessWidget {
               hintStyle: const TextStyle(
                 color: AppColors.textMuted,
                 fontWeight: FontWeight.w500,
+                fontSize: 14,
               ),
               prefixIcon: prefixIcon != null
-                  ? Icon(prefixIcon, color: AppColors.textBlack)
+                  ? Icon(prefixIcon, color: AppColors.textBlack, size: 20)
                   : null,
               suffixIcon: suffixIcon,
               border: InputBorder.none,

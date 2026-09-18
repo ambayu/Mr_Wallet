@@ -17,6 +17,10 @@ class CurrencyFormatter {
     return _rupiahFormat.format(amount);
   }
 
+  static String formatRupiah(double amount) {
+    return _rupiahFormat.format(amount);
+  }
+
   static String formatCompact(double amount) {
     return _compactFormat.format(amount);
   }

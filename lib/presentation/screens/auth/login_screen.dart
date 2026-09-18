@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/app_assets.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/mascot_art.dart';
-import '../../widgets/neo_badge.dart';
 import '../../widgets/neo_button.dart';
-import '../../widgets/neo_card.dart';
 import '../../widgets/neo_text_field.dart';
 import '../main_navigation_screen.dart';
 import 'register_screen.dart';
@@ -18,28 +16,29 @@ class LoginScreen extends StatefulWidget {
 }
 
 class _LoginScreenState extends State<LoginScreen> {
-  final TextEditingController _usernameController =
-      TextEditingController(text: 'Bang Bayu');
-  final TextEditingController _pinController =
+  final TextEditingController _identifierController =
+      TextEditingController(text: 'andi.pratama@mail.com');
+  final TextEditingController _passwordController =
       TextEditingController(text: '1234');
-  bool _obscurePin = true;
+  bool _obscurePassword = true;
+  bool _rememberMe = true;
   bool _isLoading = false;
   String _errorMessage = '';
 
   @override
   void dispose() {
-    _usernameController.dispose();
-    _pinController.dispose();
+    _identifierController.dispose();
+    _passwordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleLogin() async {
-    final username = _usernameController.text.trim();
-    final pin = _pinController.text.trim();
+    final identifier = _identifierController.text.trim();
+    final password = _passwordController.text.trim();
 
-    if (username.isEmpty || pin.isEmpty) {
+    if (identifier.isEmpty || password.isEmpty) {
       setState(() {
-        _errorMessage = 'Username dan PIN tidak boleh kosong!';
+        _errorMessage = 'Email dan Password/PIN tidak boleh kosong!';
       });
       return;
     }
@@ -50,7 +49,7 @@ class _LoginScreenState extends State<LoginScreen> {
     });
 
     final authProv = Provider.of<AuthProvider>(context, listen: false);
-    final success = await authProv.login(username, pin);
+    final success = await authProv.login(identifier, password);
 
     if (mounted) {
       setState(() => _isLoading = false);
@@ -62,7 +61,7 @@ class _LoginScreenState extends State<LoginScreen> {
         );
       } else {
         setState(() {
-          _errorMessage = 'PIN salah! Coba gunakan PIN 1234 atau registrasi baru.';
+          _errorMessage = 'Password salah! (Gunakan default: 1234 atau daftar akun baru)';
         });
       }
     }
@@ -71,150 +70,242 @@ class _LoginScreenState extends State<LoginScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.butterYellow,
-      appBar: AppBar(
-        backgroundColor: AppColors.butterYellow,
-        elevation: 0,
-        title: const Text(
-          'Masuk ke SmartFlow',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 22,
-            color: AppColors.textBlack,
-          ),
-        ),
-      ),
+      backgroundColor: AppColors.bgCream,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Mascot Greeting
-              const Center(
-                child: CrabMascotWidget(
-                  mood: MascotMood.holdingCoin,
-                  size: 110,
-                  speechBubbleText: 'Selamat Datang!',
-                ),
-              ),
-              const SizedBox(height: 18),
-
-              // Login Form Card
-              NeoCard(
-                backgroundColor: AppColors.cardWhite,
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
+              // Top Mascot Peeking & Greeting Header
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: const [
+                        SizedBox(height: 12),
                         Text(
-                          'Autentikasi Akun',
+                          'Halo\nKembali!',
                           style: TextStyle(
-                            fontSize: 18,
+                            fontSize: 32,
                             fontWeight: FontWeight.w900,
                             color: AppColors.textBlack,
+                            height: 1.1,
+                            letterSpacing: -0.5,
                           ),
                         ),
-                        NeoBadge(
-                          text: 'PIN Aman',
-                          backgroundColor: AppColors.mintGreen,
-                          fontSize: 10,
+                        SizedBox(height: 8),
+                        Text(
+                          'Senang melihatmu lagi! 👋',
+                          style: TextStyle(
+                            fontSize: 14,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMuted,
+                          ),
                         ),
                       ],
                     ),
-                    const SizedBox(height: 16),
+                  ),
+                  Image.asset(
+                    AppAssets.mascotHappy,
+                    width: 105,
+                    height: 105,
+                    fit: BoxFit.contain,
+                  ),
+                ],
+              ),
+              const SizedBox(height: 28),
 
-                    // Username Input
-                    NeoTextField(
-                      controller: _usernameController,
-                      labelText: 'Nama Pengguna / Email',
-                      hintText: 'Misal: Bang Bayu / bayu@mail.com',
-                      prefixIcon: Icons.person_rounded,
-                    ),
-                    const SizedBox(height: 14),
+              // Inputs matching UI Showcase Screen 2
+              NeoTextField(
+                controller: _identifierController,
+                hintText: 'Email atau Nomor HP',
+                prefixIcon: Icons.mail_outline_rounded,
+                backgroundColor: AppColors.cardWhite,
+              ),
+              const SizedBox(height: 16),
 
-                    // PIN Input
-                    NeoTextField(
-                      controller: _pinController,
-                      labelText: 'Security PIN / Password',
-                      hintText: '4-6 digit PIN (Default: 1234)',
-                      keyboardType: TextInputType.number,
-                      prefixIcon: Icons.lock_rounded,
-                      suffixIcon: IconButton(
-                        icon: Icon(
-                          _obscurePin
-                              ? Icons.visibility_off_outlined
-                              : Icons.visibility_outlined,
-                          color: AppColors.textBlack,
-                          size: 20,
+              NeoTextField(
+                controller: _passwordController,
+                hintText: 'Password',
+                obscureText: _obscurePassword,
+                prefixIcon: Icons.lock_outline_rounded,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: AppColors.textMuted,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
+                ),
+                backgroundColor: AppColors.cardWhite,
+              ),
+              const SizedBox(height: 14),
+
+              // Remember me & Forgot password
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  GestureDetector(
+                    onTap: () => setState(() => _rememberMe = !_rememberMe),
+                    child: Row(
+                      children: [
+                        Container(
+                          width: 20,
+                          height: 20,
+                          decoration: BoxDecoration(
+                            color: _rememberMe ? AppColors.primaryYellow : Colors.white,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.borderBlack, width: 1.6),
+                          ),
+                          child: _rememberMe
+                              ? const Icon(Icons.check, size: 14, color: AppColors.textBlack)
+                              : null,
                         ),
-                        onPressed: () {
-                          setState(() => _obscurePin = !_obscurePin);
-                        },
+                        const SizedBox(width: 8),
+                        const Text(
+                          'Ingat saya',
+                          style: TextStyle(
+                            fontSize: 13,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textBlack,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  GestureDetector(
+                    onTap: () {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        const SnackBar(
+                          content: Text('Gunakan PIN default: 1234 untuk login demo'),
+                        ),
+                      );
+                    },
+                    child: const Text(
+                      'Lupa password?',
+                      style: TextStyle(
+                        fontSize: 13,
+                        fontWeight: FontWeight.w700,
+                        color: Color(0xFF2563EB),
                       ),
                     ),
-                    const SizedBox(height: 10),
+                  ),
+                ],
+              ),
 
-                    // Quick Demo Login helper chip
-                    GestureDetector(
-                      onTap: () {
-                        setState(() {
-                          _usernameController.text = 'Bang Bayu';
-                          _pinController.text = '1234';
-                        });
-                      },
-                      child: const NeoBadge(
-                        text: '⚡ Isi Cepat Demo: Bang Bayu (PIN: 1234)',
-                        backgroundColor: AppColors.butterYellow,
-                        fontSize: 10,
+              if (_errorMessage.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.bubblePink,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.borderBlack, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 18, color: AppColors.dangerRed),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(
+                          _errorMessage,
+                          style: const TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textBlack,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+              const SizedBox(height: 24),
+
+              // Yellow Submit Button: "Masuk"
+              NeoButton(
+                label: _isLoading ? 'Memproses...' : 'Masuk',
+                backgroundColor: AppColors.primaryYellow,
+                textColor: AppColors.textBlack,
+                height: 52,
+                borderRadius: 26,
+                onPressed: _isLoading ? null : _handleLogin,
+              ),
+              const SizedBox(height: 24),
+
+              // "atau masuk dengan"
+              Row(
+                children: [
+                  const Expanded(child: Divider(color: AppColors.borderLight, thickness: 1.2)),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 12),
+                    child: Text(
+                      'atau masuk dengan',
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textMuted,
                       ),
                     ),
+                  ),
+                  const Expanded(child: Divider(color: AppColors.borderLight, thickness: 1.2)),
+                ],
+              ),
+              const SizedBox(height: 18),
 
-                    if (_errorMessage.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFD4D4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.borderBlack, width: 1.5),
-                        ),
+              // Social Login Buttons: Google & Apple
+              Row(
+                children: [
+                  Expanded(
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardWhite,
+                        borderRadius: BorderRadius.circular(25),
+                        border: Border.all(color: AppColors.borderBlack, width: 1.5),
+                      ),
+                      child: Center(
                         child: Row(
-                          children: [
-                            const Icon(Icons.error_outline,
-                                size: 18, color: Color(0xFFC0392B)),
-                            const SizedBox(width: 8),
-                            Expanded(
-                              child: Text(
-                                _errorMessage,
-                                style: const TextStyle(
-                                  fontSize: 11,
-                                  fontWeight: FontWeight.w700,
-                                  color: Color(0xFFC0392B),
-                                ),
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: const [
+                            Text(
+                              'G',
+                              style: TextStyle(
+                                fontSize: 22,
+                                fontWeight: FontWeight.w900,
+                                color: Color(0xFFEA4335),
                               ),
                             ),
                           ],
                         ),
                       ),
-                    ],
-                    const SizedBox(height: 20),
-
-                    // Submit Button
-                    NeoButton(
-                      label: _isLoading ? 'Memverifikasi...' : 'Masuk Sekarang ➔',
-                      icon: Icons.login_rounded,
-                      backgroundColor: AppColors.mintGreen,
-                      height: 52,
-                      onPressed: _isLoading ? null : _handleLogin,
                     ),
-                  ],
-                ),
+                  ),
+                  const SizedBox(width: 14),
+                  Expanded(
+                    child: Container(
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: AppColors.cardWhite,
+                        borderRadius: BorderRadius.circular(25),
+                        border: Border.all(color: AppColors.borderBlack, width: 1.5),
+                      ),
+                      child: const Center(
+                        child: Icon(Icons.apple, size: 26, color: AppColors.textBlack),
+                      ),
+                    ),
+                  ),
+                ],
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 28),
 
               // Switch to Register
               Row(
@@ -223,9 +314,9 @@ class _LoginScreenState extends State<LoginScreen> {
                   const Text(
                     'Belum punya akun? ',
                     style: TextStyle(
-                      fontWeight: FontWeight.w700,
                       fontSize: 13,
-                      color: AppColors.textBlack,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textMuted,
                     ),
                   ),
                   GestureDetector(
@@ -238,18 +329,17 @@ class _LoginScreenState extends State<LoginScreen> {
                       );
                     },
                     child: const Text(
-                      'Daftar Baru',
+                      'Daftar Sekarang',
                       style: TextStyle(
+                        fontSize: 13,
                         fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        color: AppColors.borderBlack,
-                        decoration: TextDecoration.underline,
+                        color: Color(0xFF2563EB),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 20),
             ],
           ),
         ),

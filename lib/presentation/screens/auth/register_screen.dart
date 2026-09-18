@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../../core/constants/app_assets.dart';
 import '../../../core/constants/app_colors.dart';
 import '../../providers/auth_provider.dart';
-import '../../widgets/mascot_art.dart';
-import '../../widgets/neo_badge.dart';
 import '../../widgets/neo_button.dart';
-import '../../widgets/neo_card.dart';
 import '../../widgets/neo_text_field.dart';
 import '../main_navigation_screen.dart';
 import 'login_screen.dart';
@@ -18,38 +16,42 @@ class RegisterScreen extends StatefulWidget {
 }
 
 class _RegisterScreenState extends State<RegisterScreen> {
-  final TextEditingController _usernameController = TextEditingController();
+  final TextEditingController _nameController = TextEditingController();
   final TextEditingController _emailController = TextEditingController();
-  final TextEditingController _pinController = TextEditingController();
-  final TextEditingController _confirmPinController = TextEditingController();
+  final TextEditingController _phoneController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  final TextEditingController _confirmPasswordController = TextEditingController();
+  bool _obscurePassword = true;
+  bool _obscureConfirmPassword = true;
   bool _isLoading = false;
   String _errorMessage = '';
 
   @override
   void dispose() {
-    _usernameController.dispose();
+    _nameController.dispose();
     _emailController.dispose();
-    _pinController.dispose();
-    _confirmPinController.dispose();
+    _phoneController.dispose();
+    _passwordController.dispose();
+    _confirmPasswordController.dispose();
     super.dispose();
   }
 
   Future<void> _handleRegister() async {
-    final username = _usernameController.text.trim();
+    final name = _nameController.text.trim();
     final email = _emailController.text.trim();
-    final pin = _pinController.text.trim();
-    final confirmPin = _confirmPinController.text.trim();
+    final password = _passwordController.text.trim();
+    final confirmPassword = _confirmPasswordController.text.trim();
 
-    if (username.isEmpty || pin.isEmpty) {
+    if (name.isEmpty || password.isEmpty) {
       setState(() {
-        _errorMessage = 'Nama dan PIN wajib diisi!';
+        _errorMessage = 'Nama dan Password wajib diisi!';
       });
       return;
     }
 
-    if (pin != confirmPin) {
+    if (password != confirmPassword) {
       setState(() {
-        _errorMessage = 'Konfirmasi PIN tidak cocok!';
+        _errorMessage = 'Konfirmasi Password tidak cocok!';
       });
       return;
     }
@@ -61,9 +63,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
 
     final authProv = Provider.of<AuthProvider>(context, listen: false);
     final success = await authProv.register(
-      username: username,
-      email: email.isNotEmpty ? email : '$username@smartflow.app',
-      pin: pin,
+      username: name,
+      email: email.isNotEmpty ? email : '$name@mrwallet.app',
+      pin: password,
     );
 
     if (mounted) {
@@ -85,170 +87,172 @@ class _RegisterScreenState extends State<RegisterScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppColors.mintGreen,
-      appBar: AppBar(
-        backgroundColor: AppColors.mintGreen,
-        elevation: 0,
-        title: const Text(
-          'Daftar Akun Baru',
-          style: TextStyle(
-            fontWeight: FontWeight.w900,
-            fontSize: 22,
-            color: AppColors.textBlack,
-          ),
-        ),
-      ),
+      backgroundColor: AppColors.bgCream,
       body: SafeArea(
         child: SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 12),
+          padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 16),
           child: Column(
-            crossAxisAlignment: CrossAxisAlignment.center,
+            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Mascot
-              const Center(
-                child: CrabMascotWidget(
-                  mood: MascotMood.peeking,
-                  size: 100,
-                  speechBubbleText: 'Gabung SmartFlow!',
+              const SizedBox(height: 8),
+              // Header matching Showcase Screen 3
+              const Text(
+                'Buat Akun Baru',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textBlack,
+                  letterSpacing: -0.5,
                 ),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 6),
+              const Text(
+                'Mulai perjalanan finansial lebih baik bersama Mr Wallet',
+                style: TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w600,
+                  color: AppColors.textMuted,
+                ),
+              ),
+              const SizedBox(height: 24),
 
-              // Register Card
-              NeoCard(
+              // Form fields
+              NeoTextField(
+                controller: _nameController,
+                hintText: 'Nama Lengkap',
+                prefixIcon: Icons.person_outline_rounded,
                 backgroundColor: AppColors.cardWhite,
-                padding: const EdgeInsets.all(20),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    const Row(
-                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                      children: [
-                        Text(
-                          'Data Pengguna',
-                          style: TextStyle(
-                            fontSize: 18,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.textBlack,
-                          ),
-                        ),
-                        NeoBadge(
-                          text: 'Lokal 100%',
-                          backgroundColor: AppColors.butterYellow,
-                          fontSize: 10,
-                        ),
-                      ],
-                    ),
-                    const SizedBox(height: 16),
+              ),
+              const SizedBox(height: 14),
 
-                    // Name Suggestions (Teman Fattah)
-                    const Text(
-                      'Pilih Profil Teman atau Buat Sendiri:',
-                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 12),
-                    ),
-                    const SizedBox(height: 6),
-                    SingleChildScrollView(
-                      scrollDirection: Axis.horizontal,
-                      child: Row(
-                        children: [
-                          'Bang Bayu',
-                          'Bang Lofty',
-                          'Kak Desi',
-                          'Kemal',
-                          'Ryan',
-                        ].map((name) {
-                          return Padding(
-                            padding: const EdgeInsets.only(right: 6),
-                            child: GestureDetector(
-                              onTap: () {
-                                setState(() {
-                                  _usernameController.text = name;
-                                  _emailController.text =
-                                      '${name.toLowerCase().replaceAll(" ", "")}@smartflow.app';
-                                  _pinController.text = '1234';
-                                  _confirmPinController.text = '1234';
-                                });
-                              },
-                              child: NeoBadge(
-                                text: name,
-                                backgroundColor: AppColors.skyBlue,
-                                fontSize: 10,
-                              ),
-                            ),
-                          );
-                        }).toList(),
-                      ),
-                    ),
-                    const SizedBox(height: 14),
+              NeoTextField(
+                controller: _emailController,
+                hintText: 'Email',
+                keyboardType: TextInputType.emailAddress,
+                prefixIcon: Icons.mail_outline_rounded,
+                backgroundColor: AppColors.cardWhite,
+              ),
+              const SizedBox(height: 14),
 
-                    // Username Input
-                    NeoTextField(
-                      controller: _usernameController,
-                      labelText: 'Nama Lengkap / Panggilan',
-                      hintText: 'Misal: Bang Bayu / Sarah',
-                      prefixIcon: Icons.badge_outlined,
-                    ),
-                    const SizedBox(height: 14),
+              NeoTextField(
+                controller: _phoneController,
+                hintText: 'Nomor HP',
+                keyboardType: TextInputType.phone,
+                prefixIcon: Icons.phone_outlined,
+                backgroundColor: AppColors.cardWhite,
+              ),
+              const SizedBox(height: 14),
 
-                    // Email Input
-                    NeoTextField(
-                      controller: _emailController,
-                      labelText: 'Email (Opsional)',
-                      hintText: 'bayu@smartflow.app',
-                      prefixIcon: Icons.email_outlined,
-                    ),
-                    const SizedBox(height: 14),
+              NeoTextField(
+                controller: _passwordController,
+                hintText: 'Password',
+                obscureText: _obscurePassword,
+                prefixIcon: Icons.lock_outline_rounded,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscurePassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: AppColors.textMuted,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() => _obscurePassword = !_obscurePassword);
+                  },
+                ),
+                backgroundColor: AppColors.cardWhite,
+              ),
+              const SizedBox(height: 14),
 
-                    // PIN Input
-                    NeoTextField(
-                      controller: _pinController,
-                      labelText: 'Buat 4-Digit Security PIN',
-                      hintText: 'Misal: 1234',
-                      keyboardType: TextInputType.number,
-                      prefixIcon: Icons.lock_outline,
-                    ),
-                    const SizedBox(height: 14),
+              NeoTextField(
+                controller: _confirmPasswordController,
+                hintText: 'Konfirmasi Password',
+                obscureText: _obscureConfirmPassword,
+                prefixIcon: Icons.lock_reset_rounded,
+                suffixIcon: IconButton(
+                  icon: Icon(
+                    _obscureConfirmPassword
+                        ? Icons.visibility_off_outlined
+                        : Icons.visibility_outlined,
+                    color: AppColors.textMuted,
+                    size: 20,
+                  ),
+                  onPressed: () {
+                    setState(() => _obscureConfirmPassword = !_obscureConfirmPassword);
+                  },
+                ),
+                backgroundColor: AppColors.cardWhite,
+              ),
 
-                    // Confirm PIN Input
-                    NeoTextField(
-                      controller: _confirmPinController,
-                      labelText: 'Ulangi PIN',
-                      hintText: 'Masukkan 4 digit PIN yang sama',
-                      keyboardType: TextInputType.number,
-                      prefixIcon: Icons.lock_reset_rounded,
-                    ),
-
-                    if (_errorMessage.isNotEmpty) ...[
-                      const SizedBox(height: 14),
-                      Container(
-                        padding: const EdgeInsets.all(10),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFD4D4),
-                          borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: AppColors.borderBlack, width: 1.5),
-                        ),
+              if (_errorMessage.isNotEmpty) ...[
+                const SizedBox(height: 14),
+                Container(
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.bubblePink,
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.borderBlack, width: 1.5),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.info_outline, size: 18, color: AppColors.dangerRed),
+                      const SizedBox(width: 8),
+                      Expanded(
                         child: Text(
                           _errorMessage,
                           style: const TextStyle(
-                            fontSize: 11,
+                            fontSize: 12,
                             fontWeight: FontWeight.w700,
-                            color: Color(0xFFC0392B),
+                            color: AppColors.textBlack,
                           ),
                         ),
                       ),
                     ],
-                    const SizedBox(height: 20),
+                  ),
+                ),
+              ],
+              const SizedBox(height: 16),
 
-                    // Submit Button
-                    NeoButton(
-                      label: _isLoading ? 'Membuat Akun...' : 'Buat Akun & Masuk ➔',
-                      icon: Icons.check_circle_outline,
-                      backgroundColor: AppColors.butterYellow,
-                      height: 52,
-                      onPressed: _isLoading ? null : _handleRegister,
+              // Motivational mascot badge matching showcase
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.mintGreen,
+                  borderRadius: BorderRadius.circular(18),
+                  border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                ),
+                child: Row(
+                  children: [
+                    Image.asset(
+                      AppAssets.mascotLaptop,
+                      width: 50,
+                      height: 50,
+                      fit: BoxFit.contain,
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Text(
+                        'Langkah kecil menuju masa depan besar bersama Mr Wallet!',
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.textBlack,
+                        ),
+                      ),
                     ),
                   ],
                 ),
+              ),
+              const SizedBox(height: 20),
+
+              // Yellow Submit Button: "Daftar"
+              NeoButton(
+                label: _isLoading ? 'Mendaftarkan...' : 'Daftar',
+                backgroundColor: AppColors.primaryYellow,
+                textColor: AppColors.textBlack,
+                height: 52,
+                borderRadius: 26,
+                onPressed: _isLoading ? null : _handleRegister,
               ),
               const SizedBox(height: 20),
 
@@ -259,9 +263,9 @@ class _RegisterScreenState extends State<RegisterScreen> {
                   const Text(
                     'Sudah punya akun? ',
                     style: TextStyle(
-                      fontWeight: FontWeight.w700,
                       fontSize: 13,
-                      color: AppColors.textBlack,
+                      fontWeight: FontWeight.w600,
+                      color: AppColors.textMuted,
                     ),
                   ),
                   GestureDetector(
@@ -274,18 +278,17 @@ class _RegisterScreenState extends State<RegisterScreen> {
                       );
                     },
                     child: const Text(
-                      'Masuk ke Akun',
+                      'Masuk',
                       style: TextStyle(
+                        fontSize: 13,
                         fontWeight: FontWeight.w900,
-                        fontSize: 14,
-                        color: AppColors.borderBlack,
-                        decoration: TextDecoration.underline,
+                        color: Color(0xFF2563EB),
                       ),
                     ),
                   ),
                 ],
               ),
-              const SizedBox(height: 40),
+              const SizedBox(height: 24),
             ],
           ),
         ),

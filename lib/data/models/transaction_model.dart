@@ -12,6 +12,8 @@ class TransactionModel {
   final DateTime transactionDate;
   final DateTime createdAt;
 
+  DateTime get date => transactionDate;
+
   // Joined/display fields
   final String? walletName;
   final String? toWalletName;

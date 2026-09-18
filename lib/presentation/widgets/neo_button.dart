@@ -5,6 +5,7 @@ class NeoButton extends StatefulWidget {
   final Widget? child;
   final String? label;
   final IconData? icon;
+  final Widget? trailingIcon;
   final VoidCallback? onPressed;
   final Color backgroundColor;
   final Color textColor;
@@ -20,14 +21,15 @@ class NeoButton extends StatefulWidget {
     this.child,
     this.label,
     this.icon,
+    this.trailingIcon,
     this.onPressed,
-    this.backgroundColor = AppColors.butterYellow,
+    this.backgroundColor = AppColors.primaryYellow,
     this.textColor = AppColors.textBlack,
     this.height = 52.0,
     this.width,
-    this.borderRadius = 18.0,
-    this.borderWidth = 2.5,
-    this.shadowOffset = const Offset(3.0, 3.5),
+    this.borderRadius = 28.0,
+    this.borderWidth = 2.0,
+    this.shadowOffset = const Offset(2.5, 3.0),
     this.padding = const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
   });
 
@@ -41,9 +43,7 @@ class _NeoButtonState extends State<NeoButton> {
   @override
   Widget build(BuildContext context) {
     final effectiveShadow = _isPressed ? Offset.zero : widget.shadowOffset;
-    final transformOffset = _isPressed
-        ? widget.shadowOffset
-        : Offset.zero;
+    final transformOffset = _isPressed ? widget.shadowOffset : Offset.zero;
 
     return GestureDetector(
       onTapDown: widget.onPressed == null
@@ -103,6 +103,10 @@ class _NeoButtonState extends State<NeoButton> {
                           letterSpacing: 0.2,
                         ),
                       ),
+                    if (widget.trailingIcon != null) ...[
+                      const SizedBox(width: 8),
+                      widget.trailingIcon!,
+                    ],
                   ],
                 ),
           ),

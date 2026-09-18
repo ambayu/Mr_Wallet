@@ -25,6 +25,7 @@ class TransactionProvider extends ChangeNotifier {
         _categoryRepository = categoryRepository ?? CategoryRepository();
 
   List<TransactionModel> get recentTransactions => _recentTransactions;
+  List<TransactionModel> get transactions => _recentTransactions;
   List<CategoryModel> get categories => _categories;
   double get monthlySpending => _monthlySpending;
   double get monthlyIncome => _monthlyIncome;
@@ -55,6 +56,23 @@ class TransactionProvider extends ChangeNotifier {
     _categorySpending = await _transactionRepository.getCategorySpending(now);
     _monthlyTrend = await _transactionRepository.getMonthlyTrend(now.year);
     notifyListeners();
+  }
+
+  Future<void> addTransfer({
+    required String fromWalletId,
+    required String toWalletId,
+    required double amount,
+    required String description,
+    DateTime? date,
+  }) async {
+    await addTransaction(
+      walletId: fromWalletId,
+      toWalletId: toWalletId,
+      type: 'TRANSFER',
+      amount: amount,
+      description: description,
+      transactionDate: date,
+    );
   }
 
   // ACID Add Transaction

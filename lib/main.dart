@@ -57,7 +57,7 @@ class SmartFlowApp extends StatelessWidget {
         ),
       ],
       child: MaterialApp(
-        title: 'SmartFlow Ledger',
+        title: 'Mr Wallet',
         debugShowCheckedModeBanner: false,
         theme: AppTheme.lightTheme,
         builder: (context, child) {

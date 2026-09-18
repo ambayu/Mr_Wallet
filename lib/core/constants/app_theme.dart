@@ -5,9 +5,22 @@ class AppTheme {
   static ThemeData get lightTheme {
     return ThemeData(
       useMaterial3: true,
-      scaffoldBackgroundColor: AppColors.butterYellow,
-      primaryColor: AppColors.butterYellowDark,
+      scaffoldBackgroundColor: AppColors.bgOffWhite,
+      primaryColor: AppColors.primaryYellow,
       fontFamily: 'sans-serif',
+      appBarTheme: const AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: true,
+        titleTextStyle: TextStyle(
+          fontSize: 18,
+          fontWeight: FontWeight.w900,
+          color: AppColors.textBlack,
+        ),
+        iconTheme: IconThemeData(
+          color: AppColors.textBlack,
+        ),
+      ),
       textTheme: const TextTheme(
         headlineLarge: TextStyle(
           fontSize: 28,

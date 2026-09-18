@@ -58,6 +58,8 @@ class AIService {
     _initGenerativeModels(apiKey);
   }
 
+  Future<void> saveApiKey(String apiKey) => setApiKey(apiKey);
+
   // 1. Process Voice / Text Natural Input for Multi-Action & Summarization
   Future<AIParsedResult> parseNaturalCommand({
     required String userInput,
