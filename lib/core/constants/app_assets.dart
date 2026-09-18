@@ -2,13 +2,25 @@ class AppAssets {
   // Branding & Speech
   static const String logo = 'Assets/01_branding_speech/logo_mr_wallet.png';
   static const String appIcon = 'Assets/01_branding_speech/app_icon_crab_mascot.png';
-  static const String speechAyoNabung = 'Assets/01_branding_speech/speech_ayo_nabung.png';
-  static const String speechCatatLangkah = 'Assets/01_branding_speech/speech_catat_setiap_langkah_keuangan.png';
-  static const String speechGeneric = 'Assets/01_branding_speech/speech_chat_bubble_generic.png';
-  static const String speechKeuanganBaik = 'Assets/01_branding_speech/speech_keuangan_baik_hidup_lebih_baik.png';
   static const String speechYukMulai = 'Assets/01_branding_speech/speech_yuk_mulai_sekarang.png';
+  static const String speechKeuanganBaik = 'Assets/01_branding_speech/speech_keuangan_baik_hidup_lebih_baik.png';
+  static const String speechGeneric = 'Assets/01_branding_speech/speech_chat_bubble_generic.png';
+  static const String speechCatatLangkah = 'Assets/01_branding_speech/speech_catat_setiap_langkah_keuangan.png';
+  static const String speechAyoNabung = 'Assets/01_branding_speech/speech_ayo_nabung.png';
+
+  // Wallpaper & Backgrounds
+  static const String landingPage = 'Assets/wallpaper/landing-page.png';
+  static const String landingPageLandscape = 'Assets/wallpaper/landing-page-landscape.png';
+  static const String appBackground = 'Assets/wallpaper/background.png';
+  static const String appBackgroundLandscape = 'Assets/wallpaper/bg-landscape.png';
+
+  // Showcase / Hero Illustrations
+  static const String showcaseCrabLanding = 'Assets/05_ui_showcase/ui_showcase_yellow_hoodie_crab_wallet.png';
+  static const String showcaseSavingsJourney = 'Assets/05_ui_showcase/ui_showcase_playful_savings_journey.png';
+  static const String showcaseFinanceApp = 'Assets/05_ui_showcase/ui_showcase_finance_app.png';
 
   // Mascot Crab
+  static const String mascotLogin = 'Assets/04_mascot_crab/crab_login.png';
   static const String mascotConfetti = 'Assets/04_mascot_crab/mascot_crab_celebration_confetti.png';
   static const String mascotChecklist = 'Assets/04_mascot_crab/mascot_crab_checklist.png';
   static const String mascotHalfBody = 'Assets/04_mascot_crab/mascot_crab_half_body_basic.png';

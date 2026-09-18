@@ -8,6 +8,7 @@ import '../../data/models/transaction_model.dart';
 import '../providers/transaction_provider.dart';
 import '../widgets/dialogs/add_transaction_dialog.dart';
 import '../widgets/neo_card.dart';
+import '../widgets/neo_header_card.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   final String? initialWalletFilter;
@@ -92,16 +93,43 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     final grouped = _groupTransactions(txProv.transactions);
 
     return Scaffold(
-      backgroundColor: AppColors.bgCream,
-      appBar: AppBar(
-        title: const Text('Transaksi'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+      backgroundColor: Colors.transparent,
+      appBar: NeoHeaderCard(
+        title: 'Transaksi',
+        subtitle: 'Riwayat & pencatatan keuangan',
         actions: [
-          IconButton(
-            icon: const Icon(Icons.add_circle_outline_rounded, size: 24),
-            onPressed: () => AddTransactionDialog.show(context),
-            tooltip: 'Tambah Transaksi',
+          GestureDetector(
+            onTap: () => AddTransactionDialog.show(context),
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+              decoration: BoxDecoration(
+                color: AppColors.primaryYellow,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                boxShadow: const [
+                  BoxShadow(
+                    color: AppColors.shadowBlack,
+                    offset: Offset(1.5, 1.5),
+                    blurRadius: 0,
+                  ),
+                ],
+              ),
+              child: const Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.add_rounded, size: 18, color: AppColors.textBlack),
+                  SizedBox(width: 4),
+                  Text(
+                    'Catat',
+                    style: TextStyle(
+                      fontSize: 13,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textBlack,
+                    ),
+                  ),
+                ],
+              ),
+            ),
           ),
         ],
       ),

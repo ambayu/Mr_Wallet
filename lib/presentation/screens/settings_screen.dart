@@ -6,6 +6,7 @@ import '../../core/services/ai_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/neo_button.dart';
 import '../widgets/neo_card.dart';
+import '../widgets/neo_header_card.dart';
 import '../widgets/neo_text_field.dart';
 import 'auth/landing_screen.dart';
 import 'notification_screen.dart';
@@ -119,11 +120,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userEmail = user?.email.isNotEmpty == true ? user!.email : 'andi.pratama@mail.com';
 
     return Scaffold(
-      backgroundColor: AppColors.bgCream,
-      appBar: AppBar(
-        title: const Text('Profil Saya'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+      backgroundColor: Colors.transparent,
+      appBar: NeoHeaderCard(
+        title: 'Profil & Pengaturan',
+        subtitle: 'Konfigurasi akun dan sistem',
         actions: [
           IconButton(
             icon: const Icon(Icons.settings_outlined, color: AppColors.textBlack),
@@ -158,7 +158,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                         ],
                       ),
                       child: Image.asset(
-                        AppAssets.mascotHappy,
+                        AppAssets.mascotSelfie,
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -314,9 +314,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 child: Row(
                   children: [
                     Image.asset(
-                      AppAssets.mascotHappy,
-                      width: 55,
-                      height: 55,
+                      AppAssets.mascotHearts,
+                      width: 58,
+                      height: 58,
                       fit: BoxFit.contain,
                     ),
                     const SizedBox(width: 12),

@@ -8,6 +8,7 @@ import '../widgets/dialogs/add_wallet_dialog.dart';
 import '../widgets/dialogs/balance_adjustment_dialog.dart';
 import '../widgets/neo_button.dart';
 import '../widgets/neo_card.dart';
+import '../widgets/neo_header_card.dart';
 import 'transaction_history_screen.dart';
 
 class WalletsScreen extends StatelessWidget {
@@ -19,11 +20,10 @@ class WalletsScreen extends StatelessWidget {
     final totalBalance = walletProv.totalBalance;
 
     return Scaffold(
-      backgroundColor: AppColors.bgCream,
-      appBar: AppBar(
-        title: const Text('Tabungan'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+      backgroundColor: Colors.transparent,
+      appBar: NeoHeaderCard(
+        title: 'Tabungan & Dompet',
+        subtitle: 'Atur pos & wadah finansial',
         actions: [
           IconButton(
             icon: const Icon(Icons.tune_rounded, color: AppColors.textBlack),
@@ -100,7 +100,7 @@ class WalletsScreen extends StatelessWidget {
                     ),
                     const SizedBox(width: 8),
                     Image.asset(
-                      AppAssets.mascotHappy,
+                      AppAssets.mascotGrowthChart,
                       width: 95,
                       height: 95,
                       fit: BoxFit.contain,
@@ -280,9 +280,9 @@ class WalletsScreen extends StatelessWidget {
                 child: Row(
                   children: [
                     Image.asset(
-                      AppAssets.mascotHappy,
-                      width: 65,
-                      height: 65,
+                      AppAssets.mascotTravel,
+                      width: 68,
+                      height: 68,
                       fit: BoxFit.contain,
                     ),
                     const SizedBox(width: 12),

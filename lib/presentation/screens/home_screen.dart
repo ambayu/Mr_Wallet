@@ -11,6 +11,7 @@ import '../widgets/dialogs/ai_voice_modal.dart';
 import '../widgets/dialogs/balance_adjustment_dialog.dart';
 import '../widgets/dialogs/camera_bill_snap_modal.dart';
 import '../widgets/neo_card.dart';
+import '../widgets/neo_header_card.dart';
 import 'calendar_screen.dart';
 import 'notification_screen.dart';
 import 'settings_screen.dart';
@@ -48,7 +49,115 @@ class HomeScreen extends StatelessWidget {
     final totalBalance = walletProv.totalBalance;
 
     return Scaffold(
-      backgroundColor: AppColors.bgOffWhite,
+      backgroundColor: Colors.transparent,
+      appBar: NeoHeaderCard(
+        title: 'Halo, $displayName! 👋',
+        subtitle: 'Saatnya buat hari ini lebih bermakna!',
+        actions: [
+          // Calendar shortcut
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const CalendarScreen(),
+                ),
+              );
+            },
+            child: Container(
+              width: 38,
+              height: 38,
+              margin: const EdgeInsets.only(right: 6),
+              decoration: BoxDecoration(
+                color: AppColors.pillGray,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderBlack, width: 1.8),
+              ),
+              child: const Icon(
+                Icons.calendar_today_rounded,
+                size: 18,
+                color: AppColors.textBlack,
+              ),
+            ),
+          ),
+          // Notification Bell with unread badge
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const NotificationScreen(),
+                ),
+              );
+            },
+            child: Stack(
+              children: [
+                Container(
+                  width: 38,
+                  height: 38,
+                  margin: const EdgeInsets.only(right: 6),
+                  decoration: BoxDecoration(
+                    color: AppColors.pillGray,
+                    shape: BoxShape.circle,
+                    border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                  ),
+                  child: const Icon(
+                    Icons.notifications_outlined,
+                    size: 20,
+                    color: AppColors.textBlack,
+                  ),
+                ),
+                Positioned(
+                  right: 8,
+                  top: 4,
+                  child: Container(
+                    width: 8,
+                    height: 8,
+                    decoration: const BoxDecoration(
+                      color: AppColors.dangerRed,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ),
+          // Avatar Crab Mascot
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(
+                  builder: (_) => const SettingsScreen(),
+                ),
+              );
+            },
+            child: Container(
+              width: 40,
+              height: 40,
+              padding: const EdgeInsets.all(3),
+              decoration: BoxDecoration(
+                color: AppColors.primaryYellow,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderBlack, width: 2),
+                boxShadow: const [
+                  BoxShadow(
+                    color: AppColors.shadowBlack,
+                    offset: Offset(1.5, 1.5),
+                    blurRadius: 0,
+                  ),
+                ],
+              ),
+              child: ClipOval(
+                child: Image.asset(
+                  AppAssets.appIcon,
+                  fit: BoxFit.cover,
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
       body: SafeArea(
         child: RefreshIndicator(
           onRefresh: () async {
@@ -61,146 +170,6 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Top Header matching UI Showcase Screen 4
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            'Halo, $displayName! 👋',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: const TextStyle(
-                              fontSize: 22,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textBlack,
-                              letterSpacing: -0.5,
-                            ),
-                          ),
-                          const SizedBox(height: 3),
-                          const Text(
-                            'Saatnya buat hari ini lebih bermakna!',
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              fontSize: 12.5,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    const SizedBox(width: 8),
-                    Row(
-                      children: [
-                        // Calendar shortcut
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const CalendarScreen(),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            width: 42,
-                            height: 42,
-                            margin: const EdgeInsets.only(right: 8),
-                            decoration: BoxDecoration(
-                              color: AppColors.cardWhite,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.borderBlack, width: 1.8),
-                            ),
-                            child: const Icon(
-                              Icons.calendar_today_rounded,
-                              size: 20,
-                              color: AppColors.textBlack,
-                            ),
-                          ),
-                        ),
-                        // Notification Bell with unread badge
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const NotificationScreen(),
-                              ),
-                            );
-                          },
-                          child: Stack(
-                            children: [
-                              Container(
-                                width: 42,
-                                height: 42,
-                                margin: const EdgeInsets.only(right: 8),
-                                decoration: BoxDecoration(
-                                  color: AppColors.cardWhite,
-                                  shape: BoxShape.circle,
-                                  border: Border.all(color: AppColors.borderBlack, width: 1.8),
-                                ),
-                                child: const Icon(
-                                  Icons.notifications_outlined,
-                                  size: 22,
-                                  color: AppColors.textBlack,
-                                ),
-                              ),
-                              Positioned(
-                                right: 10,
-                                top: 4,
-                                child: Container(
-                                  width: 9,
-                                  height: 9,
-                                  decoration: const BoxDecoration(
-                                    color: AppColors.dangerRed,
-                                    shape: BoxShape.circle,
-                                  ),
-                                ),
-                              ),
-                            ],
-                          ),
-                        ),
-                        // Avatar Crab Mascot
-                        GestureDetector(
-                          onTap: () {
-                            Navigator.push(
-                              context,
-                              MaterialPageRoute(
-                                builder: (_) => const SettingsScreen(),
-                              ),
-                            );
-                          },
-                          child: Container(
-                            width: 46,
-                            height: 46,
-                            padding: const EdgeInsets.all(4),
-                            decoration: BoxDecoration(
-                              color: AppColors.primaryYellow,
-                              shape: BoxShape.circle,
-                              border: Border.all(color: AppColors.borderBlack, width: 2),
-                              boxShadow: const [
-                                BoxShadow(
-                                  color: AppColors.shadowBlack,
-                                  offset: Offset(2, 2),
-                                  blurRadius: 0,
-                                ),
-                              ],
-                            ),
-                            child: Image.asset(
-                              AppAssets.appIcon,
-                              fit: BoxFit.contain,
-                            ),
-                          ),
-                        ),
-                      ],
-                    ),
-                  ],
-                ),
                 const SizedBox(height: 18),
 
                 // 2. Total Saldo Card (Pastel Lavender + Crab Mascot Peeking)
@@ -267,9 +236,9 @@ class HomeScreen extends StatelessWidget {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      // Mascot Crab
+                      // Mascot Crab with Rp Coin
                       Image.asset(
-                        AppAssets.mascotHappy,
+                        AppAssets.mascotRpCoin,
                         width: 95,
                         height: 95,
                         fit: BoxFit.contain,
@@ -517,9 +486,9 @@ class HomeScreen extends StatelessWidget {
                   child: Row(
                     children: [
                       Image.asset(
-                        AppAssets.mascotHappy,
-                        width: 70,
-                        height: 70,
+                        AppAssets.mascotPiggyBank,
+                        width: 75,
+                        height: 75,
                         fit: BoxFit.contain,
                       ),
                       const SizedBox(width: 14),
@@ -528,7 +497,7 @@ class HomeScreen extends StatelessWidget {
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: const [
                             Text(
-                              'Ayo Nabung!',
+                              'Ayo Nabung! 🐷✨',
                               style: TextStyle(
                                 fontSize: 16,
                                 fontWeight: FontWeight.w900,
@@ -537,7 +506,7 @@ class HomeScreen extends StatelessWidget {
                             ),
                             SizedBox(height: 4),
                             Text(
-                              'Masa depan cerah mulai dari sekarang.',
+                              'Masa depan cerah mulai dari sekarang. Sedikit demi sedikit lama-lama jadi bukit!',
                               style: TextStyle(
                                 fontSize: 12,
                                 fontWeight: FontWeight.w600,

@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
+import '../widgets/app_background_scaffold.dart';
 import '../widgets/neo_card.dart';
+import '../widgets/neo_header_card.dart';
 
 class NotificationScreen extends StatefulWidget {
   const NotificationScreen({super.key});
@@ -69,14 +71,12 @@ class _NotificationScreenState extends State<NotificationScreen> {
         ? _yesterdayNotifications
         : _yesterdayNotifications.where((n) => n['read'] == false).toList();
 
-    return Scaffold(
-      backgroundColor: AppColors.bgCream,
-      appBar: AppBar(
-        title: const Text('Notifikasi'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+    return AppBackgroundScaffold(
+      appBar: NeoHeaderCard(
+        title: 'Notifikasi',
+        subtitle: 'Pemberitahuan aktivitas & saldo',
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.textBlack),
           onPressed: () => Navigator.pop(context),
         ),
       ),
@@ -143,9 +143,9 @@ class _NotificationScreenState extends State<NotificationScreen> {
                 child: Row(
                   children: [
                     Image.asset(
-                      AppAssets.mascotHappy,
-                      width: 60,
-                      height: 60,
+                      AppAssets.mascotChecklist,
+                      width: 62,
+                      height: 62,
                       fit: BoxFit.contain,
                     ),
                     const SizedBox(width: 12),

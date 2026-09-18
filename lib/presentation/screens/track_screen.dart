@@ -1,10 +1,12 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
+import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../providers/transaction_provider.dart';
 import '../widgets/neo_card.dart';
+import '../widgets/neo_header_card.dart';
 
 class TrackScreen extends StatefulWidget {
   const TrackScreen({super.key});
@@ -31,11 +33,10 @@ class _TrackScreenState extends State<TrackScreen> {
     final spending = txProv.monthlySpending > 0 ? txProv.monthlySpending : 1350000.0;
 
     return Scaffold(
-      backgroundColor: AppColors.bgCream,
-      appBar: AppBar(
-        title: const Text('Insight'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+      backgroundColor: Colors.transparent,
+      appBar: const NeoHeaderCard(
+        title: 'Insight',
+        subtitle: 'Analisis & pergerakan kas',
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -230,14 +231,11 @@ class _TrackScreenState extends State<TrackScreen> {
                 child: Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Container(
-                      padding: const EdgeInsets.all(10),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardWhite,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.borderBlack, width: 1.8),
-                      ),
-                      child: const Icon(Icons.lightbulb_outline_rounded, color: AppColors.textBlack, size: 24),
+                    Image.asset(
+                      AppAssets.mascotThinking,
+                      width: 65,
+                      height: 65,
+                      fit: BoxFit.contain,
                     ),
                     const SizedBox(width: 14),
                     Expanded(
@@ -245,7 +243,7 @@ class _TrackScreenState extends State<TrackScreen> {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: const [
                           Text(
-                            'Tips dari Mr Wallet',
+                            'Tips dari Mr Wallet 💡',
                             style: TextStyle(
                               fontSize: 14,
                               fontWeight: FontWeight.w900,

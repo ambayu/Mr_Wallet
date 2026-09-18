@@ -80,6 +80,7 @@ flutter:
     - Assets/04_mascot_crab/
     - Assets/05_ui_showcase/
     - Assets/06_reference_sheets/
+    - Assets/wallpaper/
 
   # An image asset can refer to one or more resolution-specific "variants", see
   # https://flutter.dev/to/resolution-aware-images

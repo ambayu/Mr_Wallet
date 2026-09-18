@@ -7,6 +7,7 @@ import '../../core/utils/date_formatter.dart';
 import '../../data/models/task_model.dart';
 import '../providers/task_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../widgets/app_background_scaffold.dart';
 import '../widgets/dialogs/add_task_dialog.dart';
 import '../widgets/dialogs/edit_goal_dialog.dart';
 import '../widgets/mascot_art.dart';
@@ -59,41 +60,69 @@ class _TasksScreenState extends State<TasksScreen> {
 
     final filteredTasks = _filterTasks(taskProv.tasks);
 
-    return Scaffold(
-      backgroundColor: AppColors.bubblePink,
+    return AppBackgroundScaffold(
       body: SafeArea(
         child: SingleChildScrollView(
           padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // 1. Top Header
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Financial Success',
-                    style: TextStyle(
-                      fontSize: 22,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textBlack,
+              // 1. Top Header Card
+              NeoCard(
+                backgroundColor: AppColors.cardWhite,
+                borderRadius: 20,
+                borderWidth: 2,
+                shadowOffset: const Offset(2.5, 3),
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text(
+                          'Target & Impian',
+                          style: TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.textBlack,
+                            letterSpacing: -0.3,
+                          ),
+                        ),
+                        SizedBox(height: 2),
+                        Text(
+                          'Rencanakan masa depan finansialmu',
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                      ],
                     ),
-                  ),
-                  GestureDetector(
-                    onTap: () => AddTaskDialog.show(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(8),
-                      decoration: BoxDecoration(
-                        color: AppColors.butterYellow,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.borderBlack, width: 2.2),
+                    GestureDetector(
+                      onTap: () => AddTaskDialog.show(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(8),
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryYellow,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.borderBlack, width: 2),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.shadowBlack,
+                              offset: Offset(1.5, 1.5),
+                              blurRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(Icons.add, size: 20, color: AppColors.textBlack),
                       ),
-                      child: const Icon(Icons.add, color: AppColors.textBlack),
                     ),
-                  ),
-                ],
+                  ],
+                ),
               ),
-              const SizedBox(height: 14),
+              const SizedBox(height: 16),
 
               // 2. Main Title Banner: "Big Goals Brighter Days"
               const Text(

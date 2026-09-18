@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../widgets/app_background_scaffold.dart';
 import '../widgets/neo_bottom_nav.dart';
 import 'home_screen.dart';
 import 'settings_screen.dart';
@@ -33,7 +34,7 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
       const SettingsScreen(),
     ];
 
-    return Scaffold(
+    return AppBackgroundScaffold(
       body: IndexedStack(
         index: _currentIndex,
         children: screens,
@@ -49,3 +50,4 @@ class _MainNavigationScreenState extends State<MainNavigationScreen> {
     );
   }
 }
+

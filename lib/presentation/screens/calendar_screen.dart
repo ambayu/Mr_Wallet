@@ -5,8 +5,10 @@ import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../providers/transaction_provider.dart';
+import '../widgets/app_background_scaffold.dart';
 import '../widgets/neo_button.dart';
 import '../widgets/neo_card.dart';
+import '../widgets/neo_header_card.dart';
 import 'transaction_history_screen.dart';
 
 class CalendarScreen extends StatefulWidget {
@@ -52,14 +54,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
           d.day == _selectedDay.day;
     }).toList();
 
-    return Scaffold(
-      backgroundColor: AppColors.bgCream,
-      appBar: AppBar(
-        title: const Text('Kalender'),
-        backgroundColor: Colors.transparent,
-        elevation: 0,
+    return AppBackgroundScaffold(
+      appBar: NeoHeaderCard(
+        title: 'Kalender Keuangan',
+        subtitle: 'Pantau arus kas harian',
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 20),
+          icon: const Icon(Icons.arrow_back_ios_new_rounded, size: 18, color: AppColors.textBlack),
           onPressed: () => Navigator.pop(context),
         ),
       ),
