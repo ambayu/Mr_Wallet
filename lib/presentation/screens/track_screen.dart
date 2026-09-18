@@ -33,7 +33,7 @@ class _TrackScreenState extends State<TrackScreen> {
     final spending = txProv.monthlySpending > 0 ? txProv.monthlySpending : 1350000.0;
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFFEF8A7),
       appBar: const NeoHeaderCard(
         title: 'Insight',
         subtitle: 'Analisis & pergerakan kas',

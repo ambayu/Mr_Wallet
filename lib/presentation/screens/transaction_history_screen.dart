@@ -93,7 +93,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     final grouped = _groupTransactions(txProv.transactions);
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFFEF8A7),
       appBar: NeoHeaderCard(
         title: 'Transaksi',
         subtitle: 'Riwayat & pencatatan keuangan',

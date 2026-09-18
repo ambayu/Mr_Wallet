@@ -1,8 +1,6 @@
 import 'package:flutter/material.dart';
-import '../../core/constants/app_assets.dart';
 
-/// Reusable Background Wrapper yang menampilkan ambient background:
-/// [AppAssets.appBackground] untuk Portrait dan [AppAssets.appBackgroundLandscape] untuk Landscape.
+/// Solid Yellow Pastel Background Wrapper (#FEF8A7)
 class AppBackgroundScaffold extends StatelessWidget {
   final Widget body;
   final PreferredSizeWidget? appBar;
@@ -10,6 +8,7 @@ class AppBackgroundScaffold extends StatelessWidget {
   final Widget? floatingActionButton;
   final FloatingActionButtonLocation? floatingActionButtonLocation;
   final bool resizeToAvoidBottomInset;
+  final Color backgroundColor;
 
   const AppBackgroundScaffold({
     super.key,
@@ -19,41 +18,20 @@ class AppBackgroundScaffold extends StatelessWidget {
     this.floatingActionButton,
     this.floatingActionButtonLocation,
     this.resizeToAvoidBottomInset = true,
+    this.backgroundColor = const Color(0xFFFEF8A7),
   });
 
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: const Color(0xFFFEF8A7),
+      backgroundColor: backgroundColor,
       appBar: appBar,
       resizeToAvoidBottomInset: resizeToAvoidBottomInset,
       floatingActionButton: floatingActionButton,
       floatingActionButtonLocation: floatingActionButtonLocation,
       bottomNavigationBar: bottomNavigationBar,
-      body: OrientationBuilder(
-        builder: (context, orientation) {
-          final isLandscape = orientation == Orientation.landscape;
-
-          return Stack(
-            fit: StackFit.expand,
-            children: [
-              // Ambient Wallpaper Background (Portrait vs Landscape)
-              Image.asset(
-                isLandscape
-                    ? AppAssets.appBackgroundLandscape
-                    : AppAssets.appBackground,
-                width: double.infinity,
-                height: double.infinity,
-                fit: BoxFit.cover,
-                alignment: isLandscape ? Alignment.center : Alignment.topCenter,
-              ),
-
-              // Foreground Screen Body
-              body,
-            ],
-          );
-        },
-      ),
+      body: body,
     );
   }
 }
+

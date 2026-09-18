@@ -13,6 +13,7 @@ class TransactionProvider extends ChangeNotifier {
   List<CategoryModel> _categories = [];
   double _monthlySpending = 0.0;
   double _monthlyIncome = 0.0;
+  double _monthlyGrowthPercentage = 0.0;
   List<Map<String, dynamic>> _categorySpending = [];
   List<Map<String, dynamic>> _monthlyTrend = [];
   bool _isLoading = false;
@@ -29,6 +30,7 @@ class TransactionProvider extends ChangeNotifier {
   List<CategoryModel> get categories => _categories;
   double get monthlySpending => _monthlySpending;
   double get monthlyIncome => _monthlyIncome;
+  double get monthlyGrowthPercentage => _monthlyGrowthPercentage;
   List<Map<String, dynamic>> get categorySpending => _categorySpending;
   List<Map<String, dynamic>> get monthlyTrend => _monthlyTrend;
   bool get isLoading => _isLoading;
@@ -55,6 +57,24 @@ class TransactionProvider extends ChangeNotifier {
     _monthlyIncome = await _transactionRepository.getMonthlyIncome(now);
     _categorySpending = await _transactionRepository.getCategorySpending(now);
     _monthlyTrend = await _transactionRepository.getMonthlyTrend(now.year);
+
+    // Hitung pertumbuhan real net balance / income dibanding bulan lalu
+    final lastMonth = DateTime(now.year, now.month - 1, 1);
+    final lastMonthIncome = await _transactionRepository.getMonthlyIncome(lastMonth);
+    final lastMonthExpense = await _transactionRepository.getMonthlySpending(lastMonth);
+    final lastMonthNet = lastMonthIncome - lastMonthExpense;
+    final thisMonthNet = _monthlyIncome - _monthlySpending;
+
+    if (lastMonthNet > 0) {
+      _monthlyGrowthPercentage = ((thisMonthNet - lastMonthNet) / lastMonthNet) * 100.0;
+    } else if (lastMonthIncome > 0) {
+      _monthlyGrowthPercentage = ((_monthlyIncome - lastMonthIncome) / lastMonthIncome) * 100.0;
+    } else if (thisMonthNet > 0) {
+      _monthlyGrowthPercentage = 100.0;
+    } else {
+      _monthlyGrowthPercentage = 0.0;
+    }
+
     notifyListeners();
   }
 

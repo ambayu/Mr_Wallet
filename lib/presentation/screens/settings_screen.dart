@@ -120,7 +120,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final userEmail = user?.email.isNotEmpty == true ? user!.email : 'andi.pratama@mail.com';
 
     return Scaffold(
-      backgroundColor: Colors.transparent,
+      backgroundColor: const Color(0xFFFEF8A7),
       appBar: NeoHeaderCard(
         title: 'Profil & Pengaturan',
         subtitle: 'Konfigurasi akun dan sistem',
