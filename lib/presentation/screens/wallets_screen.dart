@@ -3,19 +3,41 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/currency_formatter.dart';
+import '../../core/utils/wallet_icon_helper.dart';
+import '../../data/models/savings_goal_model.dart';
+import '../../data/models/wallet_model.dart';
+import '../providers/savings_goal_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../widgets/dialogs/add_funds_dialog.dart';
 import '../widgets/dialogs/add_wallet_dialog.dart';
 import '../widgets/dialogs/balance_adjustment_dialog.dart';
 import '../widgets/neo_button.dart';
 import '../widgets/neo_card.dart';
+import 'savings_goals_screen.dart';
+import 'wallet_detail_screen.dart';
 
 class WalletsScreen extends StatelessWidget {
   const WalletsScreen({super.key});
 
+  static const Map<String, IconData> _goalIconMap = {
+    'savings': Icons.savings_rounded,
+    'flight_takeoff': Icons.flight_takeoff_rounded,
+    'laptop_mac': Icons.laptop_mac_rounded,
+    'shield': Icons.shield_rounded,
+    'home': Icons.home_rounded,
+    'directions_car': Icons.directions_car_rounded,
+    'school': Icons.school_rounded,
+    'favorite': Icons.favorite_rounded,
+    'celebration': Icons.celebration_rounded,
+    'watch': Icons.watch_rounded,
+  };
+
   @override
   Widget build(BuildContext context) {
     final walletProv = Provider.of<WalletProvider>(context);
+    final goalProv = Provider.of<SavingsGoalProvider>(context);
     final totalBalance = walletProv.totalBalance;
+    final goals = goalProv.goals;
 
     return Scaffold(
       backgroundColor: Colors.white,
@@ -116,52 +138,126 @@ class WalletsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 14),
 
-              // 2. "+ Tambah Tabungan" Button (Pastel Pink)
-              NeoButton(
-                label: '+  Tambah Tabungan',
-                backgroundColor: const Color(0xFFFFCCD8),
-                textColor: AppColors.textBlack,
-                height: 50,
-                borderRadius: 26,
-                onPressed: () => AddWalletDialog.show(context),
+              // 2. Dua Tombol Terpisah: Tambah Wadah Rekening & Kelola Pencapaian
+              Row(
+                children: [
+                  Expanded(
+                    child: NeoButton(
+                      label: '+ Wadah',
+                      icon: Icons.account_balance_wallet_rounded,
+                      backgroundColor: const Color(0xFFFFCCD8),
+                      textColor: AppColors.textBlack,
+                      height: 48,
+                      borderRadius: 24,
+                      onPressed: () => AddWalletDialog.show(context),
+                    ),
+                  ),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: NeoButton(
+                      label: 'Pencapaian',
+                      icon: Icons.emoji_events_rounded,
+                      backgroundColor: const Color(0xFFBCE7FE),
+                      textColor: AppColors.textBlack,
+                      height: 48,
+                      borderRadius: 24,
+                      onPressed: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SavingsGoalsScreen(),
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                ],
               ),
               const SizedBox(height: 20),
 
-              // 3. Goals List (Japan, Laptop, Dana Darurat)
-              _buildGoalItem(
-                title: 'Liburan ke Jepang',
-                saved: 'Rp 8.000.000',
-                target: 'Rp 15.000.000',
-                percentage: 0.53,
-                iconAsset: AppAssets.iconRollingSuitcase,
-                fallbackIcon: Icons.flight_takeoff_rounded,
-                iconBg: const Color(0xFFD6F0FF),
+              // 3. Header Wadah Rekening
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Wadah Rekening',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textBlack,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  if (walletProv.wallets.isNotEmpty)
+                    Text(
+                      '${walletProv.wallets.length} wadah',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w700,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
 
-              _buildGoalItem(
-                title: 'Beli Laptop',
-                saved: 'Rp 2.500.000',
-                target: 'Rp 12.000.000',
-                percentage: 0.21,
-                iconAsset: AppAssets.iconLaptopDevice,
-                fallbackIcon: Icons.laptop_mac_rounded,
-                iconBg: const Color(0xFFD6F0FF),
+              // 4. Daftar Wadah Rekening
+              if (walletProv.wallets.isEmpty)
+                _buildEmptyWallets(context)
+              else
+                ...walletProv.wallets.map((wallet) => Padding(
+                      padding: const EdgeInsets.only(bottom: 10),
+                      child: _buildWalletItem(context, wallet),
+                    )),
+              const SizedBox(height: 20),
+
+              // 5. Header Pencapaian + Lihat Semua
+              Row(
+                mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                children: [
+                  const Text(
+                    'Pencapaian',
+                    style: TextStyle(
+                      fontSize: 17,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textBlack,
+                      letterSpacing: -0.3,
+                    ),
+                  ),
+                  if (goals.isNotEmpty)
+                    GestureDetector(
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(
+                            builder: (_) => const SavingsGoalsScreen(),
+                          ),
+                        );
+                      },
+                      child: const Text(
+                        'Lihat Semua',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 12),
 
-              _buildGoalItem(
-                title: 'Dana Darurat',
-                saved: 'Rp 2.000.000',
-                target: 'Rp 10.000.000',
-                percentage: 0.20,
-                iconAsset: AppAssets.iconPiggyBank,
-                fallbackIcon: Icons.shield_rounded,
-                iconBg: const Color(0xFFD6F0FF),
-              ),
-              const SizedBox(height: 28),
+              // 6. Daftar Pencapaian (maks 3 teratas)
+              if (goals.isEmpty)
+                _buildEmptyGoals(context)
+              else
+                ...goals.take(3).map((goal) => Padding(
+                      padding: const EdgeInsets.only(bottom: 12),
+                      child: _buildGoalItem(context, goal),
+                    )),
+              const SizedBox(height: 16),
 
-              // 4. Mascot Tropical Vacation Card
+              // 5. Mascot Tropical Vacation Card
               NeoCard(
                 width: double.infinity,
                 backgroundColor: const Color(0xFFFFEB85),
@@ -211,16 +307,178 @@ class WalletsScreen extends StatelessWidget {
     );
   }
 
-  Widget _buildGoalItem({
-    required String title,
-    required String saved,
-    required String target,
-    required double percentage,
-    required String iconAsset,
-    required IconData fallbackIcon,
-    required Color iconBg,
-  }) {
-    final pctInt = (percentage * 100).toInt();
+  Widget _buildEmptyWallets(BuildContext context) {
+    return NeoCard(
+      backgroundColor: AppColors.cardWhite,
+      borderRadius: 18,
+      borderWidth: 1.8,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const Icon(Icons.account_balance_wallet_outlined,
+              size: 28, color: AppColors.textMuted),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Belum ada wadah rekening. Yuk tambahkan!',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () => AddWalletDialog.show(context),
+            child: const Text(
+              'Tambah',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2563EB),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildWalletItem(BuildContext context, WalletModel wallet) {
+    final iconData = WalletIconHelper.resolve(wallet.icon);
+
+    return NeoCard(
+      backgroundColor: AppColors.cardWhite,
+      borderRadius: 18,
+      borderWidth: 1.8,
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
+      onTap: () {
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (_) => WalletDetailScreen(wallet: wallet),
+          ),
+        );
+      },
+      child: Row(
+        children: [
+          // Ikon Wadah
+          Container(
+            width: 46,
+            height: 46,
+            decoration: BoxDecoration(
+              color: AppColors.fromHex(wallet.color),
+              borderRadius: BorderRadius.circular(14),
+              border: Border.all(color: AppColors.borderBlack, width: 1.5),
+            ),
+            child: Icon(iconData, size: 22, color: AppColors.textBlack),
+          ),
+          const SizedBox(width: 12),
+
+          // Nama Wadah
+          Expanded(
+            child: Row(
+              children: [
+                Flexible(
+                  child: Text(
+                    wallet.name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(
+                      fontSize: 14,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textBlack,
+                    ),
+                  ),
+                ),
+                if (wallet.isDefault) ...[
+                  const SizedBox(width: 6),
+                  Container(
+                    padding: const EdgeInsets.symmetric(
+                        horizontal: 5, vertical: 1),
+                    decoration: BoxDecoration(
+                      color: AppColors.primaryYellow,
+                      borderRadius: BorderRadius.circular(6),
+                      border: Border.all(
+                          color: AppColors.borderBlack, width: 0.8),
+                    ),
+                    child: const Text(
+                      'Utama',
+                      style: TextStyle(
+                          fontSize: 8.5, fontWeight: FontWeight.w900),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+          ),
+
+          // Saldo & Panah
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              Text(
+                CurrencyFormatter.formatRupiah(wallet.balance),
+                style: const TextStyle(
+                  fontSize: 13.5,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textBlack,
+                ),
+              ),
+              const SizedBox(height: 2),
+              const Icon(Icons.arrow_forward_ios_rounded,
+                  size: 12, color: AppColors.textMuted),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyGoals(BuildContext context) {
+    return NeoCard(
+      backgroundColor: AppColors.cardWhite,
+      borderRadius: 18,
+      borderWidth: 1.8,
+      padding: const EdgeInsets.all(16),
+      child: Row(
+        children: [
+          const Icon(Icons.emoji_events_outlined,
+              size: 28, color: AppColors.textMuted),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Belum ada pencapaian. Yuk buat target impianmu!',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+          GestureDetector(
+            onTap: () {
+              Navigator.push(
+                context,
+                MaterialPageRoute(builder: (_) => const SavingsGoalsScreen()),
+              );
+            },
+            child: const Text(
+              'Buat',
+              style: TextStyle(
+                fontSize: 13,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFF2563EB),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGoalItem(BuildContext context, SavingsGoalModel goal) {
+    final iconData = _goalIconMap[goal.icon] ?? Icons.savings_rounded;
 
     return NeoCard(
       backgroundColor: AppColors.cardWhite,
@@ -235,22 +493,11 @@ class WalletsScreen extends StatelessWidget {
                 width: 44,
                 height: 44,
                 decoration: BoxDecoration(
-                  color: iconBg,
+                  color: AppColors.fromHex(goal.color),
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(color: AppColors.borderBlack, width: 1.5),
                 ),
-                child: Center(
-                  child: Image.asset(
-                    iconAsset,
-                    width: 24,
-                    height: 24,
-                    errorBuilder: (_, __, ___) => Icon(
-                      fallbackIcon,
-                      size: 20,
-                      color: AppColors.textBlack,
-                    ),
-                  ),
-                ),
+                child: Icon(iconData, size: 20, color: AppColors.textBlack),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -258,7 +505,9 @@ class WalletsScreen extends StatelessWidget {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     Text(
-                      title,
+                      goal.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                       style: const TextStyle(
                         fontSize: 14,
                         fontWeight: FontWeight.w900,
@@ -267,7 +516,7 @@ class WalletsScreen extends StatelessWidget {
                     ),
                     const SizedBox(height: 2),
                     Text(
-                      '$saved / $target',
+                      '${CurrencyFormatter.formatShort(goal.savedAmount)} / ${CurrencyFormatter.formatShort(goal.targetAmount)}',
                       style: const TextStyle(
                         fontSize: 12,
                         fontWeight: FontWeight.w600,
@@ -278,7 +527,7 @@ class WalletsScreen extends StatelessWidget {
                 ),
               ),
               Text(
-                '$pctInt%',
+                '${goal.progressPercent}%',
                 style: const TextStyle(
                   fontSize: 14,
                   fontWeight: FontWeight.w900,
@@ -298,13 +547,43 @@ class WalletsScreen extends StatelessWidget {
               ),
               child: FractionallySizedBox(
                 alignment: Alignment.centerLeft,
-                widthFactor: percentage,
+                widthFactor: goal.progress,
                 child: Container(
                   decoration: BoxDecoration(
                     color: const Color(0xFF10B981),
                     borderRadius: BorderRadius.circular(8),
                   ),
                 ),
+              ),
+            ),
+          ),
+          const SizedBox(height: 10),
+          GestureDetector(
+            onTap: () => AddFundsDialog.show(context, goal),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 8),
+              alignment: Alignment.center,
+              decoration: BoxDecoration(
+                color: AppColors.mintGreen,
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.borderBlack, width: 1.5),
+              ),
+              child: const Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  Icon(Icons.add_rounded,
+                      size: 15, color: AppColors.textBlack),
+                  SizedBox(width: 4),
+                  Text(
+                    'Tambah Dana',
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: FontWeight.w900,
+                      color: AppColors.textBlack,
+                    ),
+                  ),
+                ],
               ),
             ),
           ),

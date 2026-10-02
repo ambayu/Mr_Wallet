@@ -1,12 +1,14 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:provider/provider.dart';
 import 'core/constants/app_theme.dart';
 import 'core/services/ai_service.dart';
 import 'core/services/notification_service.dart';
 import 'presentation/providers/ai_provider.dart';
 import 'presentation/providers/auth_provider.dart';
+import 'presentation/providers/savings_goal_provider.dart';
 import 'presentation/providers/task_provider.dart';
 import 'presentation/providers/transaction_provider.dart';
 import 'presentation/providers/wallet_provider.dart';
@@ -15,6 +17,9 @@ import 'presentation/screens/main_navigation_screen.dart';
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+
+  // Initialize Indonesian Locale Date Formatting
+  await initializeDateFormatting('id_ID', null);
 
   // Set status bar and system navigation bar styling
   SystemChrome.setSystemUIOverlayStyle(
@@ -51,6 +56,9 @@ class SmartFlowApp extends StatelessWidget {
         ),
         ChangeNotifierProvider(
           create: (_) => TaskProvider()..loadTasks(),
+        ),
+        ChangeNotifierProvider(
+          create: (_) => SavingsGoalProvider()..loadGoals(),
         ),
         ChangeNotifierProvider(
           create: (_) => AIProvider(),

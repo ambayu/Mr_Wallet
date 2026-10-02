@@ -3,10 +3,11 @@ import 'package:provider/provider.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/currency_formatter.dart';
+import '../../data/models/savings_goal_model.dart';
 import '../providers/auth_provider.dart';
+import '../providers/savings_goal_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/wallet_provider.dart';
-import '../widgets/dialogs/add_transaction_dialog.dart';
 import '../widgets/dialogs/camera_bill_snap_modal.dart';
 import '../widgets/neo_card.dart';
 import 'settings_screen.dart';
@@ -26,6 +27,7 @@ class HomeScreen extends StatelessWidget {
     final authProv = Provider.of<AuthProvider>(context);
     final walletProv = Provider.of<WalletProvider>(context);
     final txProv = Provider.of<TransactionProvider>(context);
+    final goalProv = Provider.of<SavingsGoalProvider>(context);
 
     final rawUser = authProv.currentUser?.username.trim() ?? '';
     String displayName = 'Andi';
@@ -245,40 +247,40 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // 3. 4 Quick Action Buttons matching Mockup: [+] Pengeluaran, [-] Pemasukan, [💼] Tabungan, [📷] Scan
+                // 3. Quick Action Buttons: [Tabung (Riwayat & Catat)], [Target Tabungan], [Scan Struk]
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
                   children: [
+                    // Tombol Utama "Tabung": Pindah langsung ke Halaman Riwayat Transaksi Bulanan
                     _buildQuickAction(
                       context: context,
-                      label: 'Pengeluaran',
-                      icon: Icons.add_rounded,
-                      bgColor: const Color(0xFFC8F8B8),
-                      onTap: () => AddTransactionDialog.show(context, initialType: 'EXPENSE'),
-                    ),
-                    _buildQuickAction(
-                      context: context,
-                      label: 'Pemasukan',
-                      icon: Icons.remove_rounded,
-                      bgColor: const Color(0xFFFFCCD8),
-                      onTap: () => AddTransactionDialog.show(context, initialType: 'INCOME'),
-                    ),
-                    _buildQuickAction(
-                      context: context,
-                      label: 'Tabungan',
-                      icon: Icons.business_center_rounded,
-                      bgColor: const Color(0xFFBCE7FE),
+                      label: 'Tabung',
+                      icon: Icons.savings_rounded,
+                      bgColor: const Color(0xFFC8F8B8), // Mint Green Pastel Neo-Brutalist
                       onTap: () {
                         if (onNavigateTab != null) {
-                          onNavigateTab!(3); // Go to Tabungan Tab
+                          onNavigateTab!(1); // Go to Transaction History Tab (Riwayat & Pencatatan)
+                        } else {
+                          onSeeAllTransactions();
                         }
                       },
                     ),
                     _buildQuickAction(
                       context: context,
-                      label: 'Scan',
+                      label: 'Target Tabungan',
+                      icon: Icons.business_center_rounded,
+                      bgColor: const Color(0xFFBCE7FE), // Sky Blue Pastel
+                      onTap: () {
+                        if (onNavigateTab != null) {
+                          onNavigateTab!(3); // Go to Tabungan Goals Tab
+                        }
+                      },
+                    ),
+                    _buildQuickAction(
+                      context: context,
+                      label: 'Scan Struk',
                       icon: Icons.qr_code_scanner_rounded,
-                      bgColor: Colors.white,
+                      bgColor: const Color(0xFFFFCCD8), // Bubble Pink Pastel
                       onTap: () => CameraBillSnapModal.show(context),
                     ),
                   ],
@@ -335,99 +337,11 @@ class HomeScreen extends StatelessWidget {
                       ),
                       const SizedBox(height: 14),
 
-                      // Goal Card Item (Liburan ke Jepang)
-                      Container(
-                        padding: const EdgeInsets.all(14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF8FAFC),
-                          borderRadius: BorderRadius.circular(20),
-                          border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                        ),
-                        child: Column(
-                          children: [
-                            Row(
-                              children: [
-                                // Torii / Japan Gate Icon / Illustration
-                                Container(
-                                  width: 48,
-                                  height: 48,
-                                  decoration: BoxDecoration(
-                                    color: const Color(0xFFD6F0FF),
-                                    borderRadius: BorderRadius.circular(16),
-                                    border: Border.all(color: AppColors.borderBlack, width: 1.5),
-                                  ),
-                                  child: Center(
-                                    child: Image.asset(
-                                      AppAssets.iconRollingSuitcase,
-                                      width: 28,
-                                      height: 28,
-                                      errorBuilder: (_, __, ___) => const Icon(
-                                        Icons.flight_takeoff_rounded,
-                                        color: AppColors.textBlack,
-                                      ),
-                                    ),
-                                  ),
-                                ),
-                                const SizedBox(width: 12),
-                                Expanded(
-                                  child: Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: const [
-                                      Text(
-                                        'Liburan ke Jepang',
-                                        style: TextStyle(
-                                          fontSize: 15,
-                                          fontWeight: FontWeight.w900,
-                                          color: AppColors.textBlack,
-                                        ),
-                                      ),
-                                      SizedBox(height: 3),
-                                      Text(
-                                        'Rp 8.000.000 / Rp 15.000.000',
-                                        style: TextStyle(
-                                          fontSize: 12,
-                                          fontWeight: FontWeight.w600,
-                                          color: AppColors.textMuted,
-                                        ),
-                                      ),
-                                    ],
-                                  ),
-                                ),
-                                const Text(
-                                  '53%',
-                                  style: TextStyle(
-                                    fontSize: 14,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.textBlack,
-                                  ),
-                                ),
-                              ],
-                            ),
-                            const SizedBox(height: 12),
-                            // Progress bar
-                            ClipRRect(
-                              borderRadius: BorderRadius.circular(10),
-                              child: Container(
-                                height: 8,
-                                decoration: BoxDecoration(
-                                  color: const Color(0xFFE2E8F0),
-                                  borderRadius: BorderRadius.circular(10),
-                                ),
-                                child: FractionallySizedBox(
-                                  alignment: Alignment.centerLeft,
-                                  widthFactor: 0.53,
-                                  child: Container(
-                                    decoration: BoxDecoration(
-                                      color: const Color(0xFF10B981),
-                                      borderRadius: BorderRadius.circular(10),
-                                    ),
-                                  ),
-                                ),
-                              ),
-                            ),
-                          ],
-                        ),
-                      ),
+                      // Goal Card Item (Pencapaian Teratas)
+                      if (goalProv.goals.isNotEmpty)
+                        _buildTopGoalCard(context, goalProv.goals.first)
+                      else
+                        _buildGoalEmptyState(context),
                       const SizedBox(height: 16),
 
                       // "Ayo Nabung!" Yellow Mascot Banner Card
@@ -490,6 +404,139 @@ class HomeScreen extends StatelessWidget {
             ),
           ),
         ),
+      ),
+    );
+  }
+
+  static const Map<String, IconData> _goalIconMap = {
+    'savings': Icons.savings_rounded,
+    'flight_takeoff': Icons.flight_takeoff_rounded,
+    'laptop_mac': Icons.laptop_mac_rounded,
+    'shield': Icons.shield_rounded,
+    'home': Icons.home_rounded,
+    'directions_car': Icons.directions_car_rounded,
+    'school': Icons.school_rounded,
+    'favorite': Icons.favorite_rounded,
+    'celebration': Icons.celebration_rounded,
+    'watch': Icons.watch_rounded,
+  };
+
+  Widget _buildTopGoalCard(BuildContext context, SavingsGoalModel goal) {
+    final iconData = _goalIconMap[goal.icon] ?? Icons.savings_rounded;
+
+    return Container(
+      padding: const EdgeInsets.all(14),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+      ),
+      child: Column(
+        children: [
+          Row(
+            children: [
+              Container(
+                width: 48,
+                height: 48,
+                decoration: BoxDecoration(
+                  color: AppColors.fromHex(goal.color),
+                  borderRadius: BorderRadius.circular(16),
+                  border:
+                      Border.all(color: AppColors.borderBlack, width: 1.5),
+                ),
+                child: Center(
+                  child: Icon(iconData,
+                      size: 24, color: AppColors.textBlack),
+                ),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      goal.name,
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(
+                        fontSize: 15,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textBlack,
+                      ),
+                    ),
+                    const SizedBox(height: 3),
+                    Text(
+                      '${CurrencyFormatter.formatShort(goal.savedAmount)} / ${CurrencyFormatter.formatShort(goal.targetAmount)}',
+                      style: const TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textMuted,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Text(
+                '${goal.progressPercent}%',
+                style: const TextStyle(
+                  fontSize: 14,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textBlack,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Progress bar
+          ClipRRect(
+            borderRadius: BorderRadius.circular(10),
+            child: Container(
+              height: 8,
+              decoration: BoxDecoration(
+                color: const Color(0xFFE2E8F0),
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: FractionallySizedBox(
+                alignment: Alignment.centerLeft,
+                widthFactor: goal.progress,
+                child: Container(
+                  decoration: BoxDecoration(
+                    color: const Color(0xFF10B981),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGoalEmptyState(BuildContext context) {
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: const Color(0xFFF8FAFC),
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
+      ),
+      child: Row(
+        children: [
+          const Icon(Icons.emoji_events_outlined,
+              size: 28, color: AppColors.textMuted),
+          const SizedBox(width: 12),
+          const Expanded(
+            child: Text(
+              'Belum ada tujuan keuangan. Buat di halaman Tabungan yuk!',
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ),
+        ],
       ),
     );
   }

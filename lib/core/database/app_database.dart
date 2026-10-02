@@ -23,9 +23,10 @@ class AppDatabase {
       return await databaseFactory.openDatabase(
         'smartflow_ledger.db',
         options: OpenDatabaseOptions(
-          version: 1,
+          version: 2,
           onConfigure: _onConfigure,
           onCreate: _onCreate,
+          onUpgrade: _onUpgrade,
         ),
       );
     }
@@ -51,9 +52,10 @@ class AppDatabase {
     return await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 1,
+        version: 2,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
+        onUpgrade: _onUpgrade,
       ),
     );
   }
@@ -137,6 +139,9 @@ class AppDatabase {
       await txn.execute('CREATE INDEX idx_trans_wallet ON transactions (wallet_id)');
       await txn.execute('CREATE INDEX idx_tasks_due ON tasks (due_date)');
 
+      // 5. Savings Goals table (Pencapaian / Target Tabungan)
+      await _createSavingsGoalsTable(txn);
+
       // Seed Initial Wallets
       final now = DateTime.now().toIso8601String();
       await txn.insert('wallets', {
@@ -183,19 +188,8 @@ class AppDatabase {
         'created_at': now,
       });
 
-      // Seed Default Categories
-      final categories = [
-        {'id': 'c_food', 'name': 'Makanan & Kopi', 'type': 'EXPENSE', 'icon': 'restaurant', 'color': '#FFF0B3'},
-        {'id': 'c_shop', 'name': 'Belanja', 'type': 'EXPENSE', 'icon': 'shopping_bag', 'color': '#FFBEE3'},
-        {'id': 'c_trans', 'name': 'Transportasi', 'type': 'EXPENSE', 'icon': 'directions_car', 'color': '#BFF2A5'},
-        {'id': 'c_bill', 'name': 'Tagihan & Listrik', 'type': 'EXPENSE', 'icon': 'receipt_long', 'color': '#A594F9'},
-        {'id': 'c_lost', 'name': 'Uang Hilang / Selisih', 'type': 'ADJUSTMENT', 'icon': 'help_outline', 'color': '#FF8A8A'},
-        {'id': 'c_admin', 'name': 'Biaya Admin Bank', 'type': 'EXPENSE', 'icon': 'account_balance', 'color': '#E0E0E0'},
-        {'id': 'c_salary', 'name': 'Gaji & Pendapatan', 'type': 'INCOME', 'icon': 'attach_money', 'color': '#BFF2A5'},
-        {'id': 'c_transfer', 'name': 'Transfer Saldo', 'type': 'TRANSFER', 'icon': 'sync_alt', 'color': '#C4D7FF'},
-      ];
-
-      for (final cat in categories) {
+      // Seed Default Categories (Katalog Kategori Lengkap)
+      for (final cat in defaultCategoriesList) {
         await txn.insert('categories', cat);
       }
 
@@ -248,7 +242,111 @@ class AppDatabase {
         'wallet_id': 'w_cash',
         'created_at': now,
       });
+
+      // Seed Initial Savings Goals (Pencapaian)
+      final savingsGoals = [
+        {
+          'id': 'sg_japan',
+          'name': 'Liburan ke Jepang',
+          'target_amount': 15000000.0,
+          'saved_amount': 8000000.0,
+          'deadline': null,
+          'icon': 'flight_takeoff',
+          'color': '#D6F0FF',
+          'created_at': now,
+        },
+        {
+          'id': 'sg_laptop',
+          'name': 'Beli Laptop',
+          'target_amount': 12000000.0,
+          'saved_amount': 2500000.0,
+          'deadline': null,
+          'icon': 'laptop_mac',
+          'color': '#D6F0FF',
+          'created_at': now,
+        },
+        {
+          'id': 'sg_emergency',
+          'name': 'Dana Darurat',
+          'target_amount': 10000000.0,
+          'saved_amount': 2000000.0,
+          'deadline': null,
+          'icon': 'shield',
+          'color': '#D6F0FF',
+          'created_at': now,
+        },
+      ];
+
+      for (final goal in savingsGoals) {
+        await txn.insert('savings_goals', goal);
+      }
     });
+  }
+
+  /// Membuat tabel savings_goals (dipakai onCreate & onUpgrade).
+  Future<void> _createSavingsGoalsTable(DatabaseExecutor db) async {
+    await db.execute('''
+      CREATE TABLE IF NOT EXISTS savings_goals (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL,
+        target_amount REAL NOT NULL DEFAULT 0.0,
+        saved_amount REAL NOT NULL DEFAULT 0.0,
+        deadline TEXT,
+        icon TEXT NOT NULL DEFAULT 'savings',
+        color TEXT NOT NULL DEFAULT '#D6F0FF',
+        created_at TEXT NOT NULL
+      )
+    ''');
+  }
+
+  /// Migrasi skema dari versi lama ke versi baru.
+  Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
+    if (oldVersion < 2) {
+      await _createSavingsGoalsTable(db);
+
+      // Seed default goals hanya jika tabel masih kosong (upgrade dari v1)
+      final countResult =
+          await db.rawQuery('SELECT COUNT(*) AS c FROM savings_goals');
+      final existing = (countResult.first['c'] as num?)?.toInt() ?? 0;
+      if (existing == 0) {
+        final now = DateTime.now().toIso8601String();
+        final savingsGoals = [
+          {
+            'id': 'sg_japan',
+            'name': 'Liburan ke Jepang',
+            'target_amount': 15000000.0,
+            'saved_amount': 8000000.0,
+            'deadline': null,
+            'icon': 'flight_takeoff',
+            'color': '#D6F0FF',
+            'created_at': now,
+          },
+          {
+            'id': 'sg_laptop',
+            'name': 'Beli Laptop',
+            'target_amount': 12000000.0,
+            'saved_amount': 2500000.0,
+            'deadline': null,
+            'icon': 'laptop_mac',
+            'color': '#D6F0FF',
+            'created_at': now,
+          },
+          {
+            'id': 'sg_emergency',
+            'name': 'Dana Darurat',
+            'target_amount': 10000000.0,
+            'saved_amount': 2000000.0,
+            'deadline': null,
+            'icon': 'shield',
+            'color': '#D6F0FF',
+            'created_at': now,
+          },
+        ];
+        for (final goal in savingsGoals) {
+          await db.insert('savings_goals', goal);
+        }
+      }
+    }
   }
 
   Future<void> close() async {
@@ -258,4 +356,68 @@ class AppDatabase {
       _database = null;
     }
   }
+
+  /// Katalog Kategori Default Lengkap (Sederhana 1 Kata & Terstruktur Berdasarkan Prioritas).
+  static const List<Map<String, dynamic>> defaultCategoriesList = [
+    // --- 1. Kebutuhan Pokok & Harian (Prioritas Utama) ---
+    {'id': 'c_food', 'name': 'Makan', 'type': 'EXPENSE', 'icon': 'restaurant', 'color': '#FFF0B3'},
+    {'id': 'c_drink', 'name': 'Minum', 'type': 'EXPENSE', 'icon': 'local_cafe', 'color': '#FFDEB5'},
+    {'id': 'c_snack', 'name': 'Camilan', 'type': 'EXPENSE', 'icon': 'cookie', 'color': '#FFF0B3'},
+    {'id': 'c_shop', 'name': 'Belanja', 'type': 'EXPENSE', 'icon': 'shopping_bag', 'color': '#FFBEE3'},
+    {'id': 'c_veg', 'name': 'Sayur', 'type': 'EXPENSE', 'icon': 'eco', 'color': '#CEF8BA'},
+    {'id': 'c_fruit', 'name': 'Buah', 'type': 'EXPENSE', 'icon': 'apple', 'color': '#FFCCD5'},
+    {'id': 'c_clothes', 'name': 'Baju', 'type': 'EXPENSE', 'icon': 'checkroom', 'color': '#E4DBFA'},
+
+    // --- 2. Kendaraan & Transportasi ---
+    {'id': 'c_gas', 'name': 'Bensin', 'type': 'EXPENSE', 'icon': 'local_gas_station', 'color': '#BFF2A5'},
+    {'id': 'c_motor', 'name': 'Motor', 'type': 'EXPENSE', 'icon': 'two_wheeler', 'color': '#D2EEFC'},
+    {'id': 'c_car', 'name': 'Mobil', 'type': 'EXPENSE', 'icon': 'directions_car', 'color': '#D2EEFC'},
+    {'id': 'c_parking', 'name': 'Parkir', 'type': 'EXPENSE', 'icon': 'local_parking', 'color': '#E0E0E0'},
+    {'id': 'c_trans', 'name': 'Transport', 'type': 'EXPENSE', 'icon': 'directions_bus', 'color': '#BFF2A5'},
+    {'id': 'c_travel', 'name': 'Liburan', 'type': 'EXPENSE', 'icon': 'flight', 'color': '#FFDEB5'},
+
+    // --- 3. Tagihan & Tempat Tinggal ---
+    {'id': 'c_phone', 'name': 'Pulsa', 'type': 'EXPENSE', 'icon': 'phone_android', 'color': '#D2EEFC'},
+    {'id': 'c_wifi', 'name': 'WiFi', 'type': 'EXPENSE', 'icon': 'wifi', 'color': '#D2EEFC'},
+    {'id': 'c_bill', 'name': 'Listrik', 'type': 'EXPENSE', 'icon': 'receipt_long', 'color': '#A594F9'},
+    {'id': 'c_water', 'name': 'Air', 'type': 'EXPENSE', 'icon': 'water_drop', 'color': '#D2EEFC'},
+    {'id': 'c_housing', 'name': 'Kos', 'type': 'EXPENSE', 'icon': 'apartment', 'color': '#D2EEFC'},
+    {'id': 'c_home', 'name': 'Rumah', 'type': 'EXPENSE', 'icon': 'home', 'color': '#FFDEB5'},
+    {'id': 'c_laundry', 'name': 'Laundry', 'type': 'EXPENSE', 'icon': 'local_laundry_service', 'color': '#E4DBFA'},
+    {'id': 'c_sub', 'name': 'Langganan', 'type': 'EXPENSE', 'icon': 'subscriptions', 'color': '#FFCCD5'},
+    {'id': 'c_tax', 'name': 'Pajak', 'type': 'EXPENSE', 'icon': 'request_quote', 'color': '#E0E0E0'},
+    {'id': 'c_ins', 'name': 'Asuransi', 'type': 'EXPENSE', 'icon': 'shield', 'color': '#D2EEFC'},
+    {'id': 'c_repair', 'name': 'Servis', 'type': 'EXPENSE', 'icon': 'build', 'color': '#E0E0E0'},
+
+    // --- 4. Kesehatan & Edukasi ---
+    {'id': 'c_health', 'name': 'Kesehatan', 'type': 'EXPENSE', 'icon': 'local_hospital', 'color': '#FFCCD5'},
+    {'id': 'c_medicine', 'name': 'Obat', 'type': 'EXPENSE', 'icon': 'medication', 'color': '#FFCCD5'},
+    {'id': 'c_skincare', 'name': 'Skincare', 'type': 'EXPENSE', 'icon': 'shower', 'color': '#FFDEB5'},
+    {'id': 'c_beauty', 'name': 'Cantik', 'type': 'EXPENSE', 'icon': 'spa', 'color': '#FFCCD5'},
+    {'id': 'c_edu', 'name': 'Sekolah', 'type': 'EXPENSE', 'icon': 'school', 'color': '#D2EEFC'},
+    {'id': 'c_book', 'name': 'Buku', 'type': 'EXPENSE', 'icon': 'menu_book', 'color': '#CEF8BA'},
+    {'id': 'c_kids', 'name': 'Anak', 'type': 'EXPENSE', 'icon': 'child_care', 'color': '#E4DBFA'},
+
+    // --- 5. Hiburan & Sosial ---
+    {'id': 'c_social', 'name': 'Nongkrong', 'type': 'EXPENSE', 'icon': 'groups', 'color': '#E4DBFA'},
+    {'id': 'c_game', 'name': 'Game', 'type': 'EXPENSE', 'icon': 'sports_esports', 'color': '#FFDEB5'},
+    {'id': 'c_sport', 'name': 'Olahraga', 'type': 'EXPENSE', 'icon': 'fitness_center', 'color': '#CEF8BA'},
+    {'id': 'c_hobby', 'name': 'Hobi', 'type': 'EXPENSE', 'icon': 'palette', 'color': '#E4DBFA'},
+    {'id': 'c_gift', 'name': 'Kado', 'type': 'EXPENSE', 'icon': 'card_giftcard', 'color': '#FFCCD5'},
+    {'id': 'c_donation', 'name': 'Sedekah', 'type': 'EXPENSE', 'icon': 'volunteer_activism', 'color': '#CEF8BA'},
+    {'id': 'c_smoke', 'name': 'Rokok', 'type': 'EXPENSE', 'icon': 'smoking_rooms', 'color': '#E0E0E0'},
+    {'id': 'c_pet', 'name': 'Hewan', 'type': 'EXPENSE', 'icon': 'pets', 'color': '#FFF0B3'},
+    {'id': 'c_device', 'name': 'Gadget', 'type': 'EXPENSE', 'icon': 'devices', 'color': '#D2EEFC'},
+    {'id': 'c_lottery', 'name': 'Lotre', 'type': 'EXPENSE', 'icon': 'casino', 'color': '#FFF0B3'},
+
+    // --- 6. Finansial & Pendapatan ---
+    {'id': 'c_salary', 'name': 'Gaji', 'type': 'INCOME', 'icon': 'attach_money', 'color': '#BFF2A5'},
+    {'id': 'c_bonus', 'name': 'Bonus', 'type': 'INCOME', 'icon': 'redeem', 'color': '#BFF2A5'},
+    {'id': 'c_biz', 'name': 'Usaha', 'type': 'INCOME', 'icon': 'storefront', 'color': '#FFF0B3'},
+    {'id': 'c_invest', 'name': 'Investasi', 'type': 'INCOME', 'icon': 'trending_up', 'color': '#BFF2A5'},
+    {'id': 'c_debt', 'name': 'Cicilan', 'type': 'EXPENSE', 'icon': 'credit_card', 'color': '#FF8A8A'},
+    {'id': 'c_transfer', 'name': 'Transfer', 'type': 'TRANSFER', 'icon': 'sync_alt', 'color': '#C4D7FF'},
+    {'id': 'c_lost', 'name': 'Selisih', 'type': 'ADJUSTMENT', 'icon': 'help_outline', 'color': '#FF8A8A'},
+    {'id': 'c_admin', 'name': 'Admin', 'type': 'EXPENSE', 'icon': 'account_balance', 'color': '#E0E0E0'},
+  ];
 }

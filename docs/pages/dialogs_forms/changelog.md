@@ -1,0 +1,31 @@
+# Dialogs & Modal Forms — Changelog
+
+## [Unreleased]
+- Merestrukturisasi alur input transaksi: Tipe -> Kategori -> Nominal Rupiah -> Dompet Default Utama.
+- Menambahkan auto-formatter Currency Rupiah pada input nominal.
+- Menambahkan dialog terintegrasi untuk menambah Kategori baru secara mandiri lengkap dengan pemilih ikon dan palet warna pastel.
+- Mengatur seleksi default akun rekening ke Dompet Utama.
+- **`AddWalletDialog`**: menghapus pemilihan **Tipe Wadah** dan menambahkan **pemilih Logo Wadah** (`WalletIconHelper.options`).
+- Menambahkan util bersama `WalletIconHelper` untuk memetakan key ikon → `IconData` secara konsisten.
+- Seluruh tampilan wadah (daftar Tabungan, modal Lihat Dompet, picker header, detail dompet, dropdown transaksi) kini memakai `wallet.icon` pilihan pengguna, bukan lagi turunan tipe.
+- **Migrasi Input Transaksi**: mengganti bottom-sheet `AddTransactionDialog` dengan **halaman penuh `AddTransactionScreen`**. Alur baru: pilih kategori via Grid 4 Kolom terkurasi → panel mengambang (`_TransactionFormSheet`) untuk tipe, nominal, dompet, tanggal, dan catatan. File dialog lama dihapus.
+- `AddTransactionScreen` menerima `initialWalletId` (pre-select dompet) dan `initialDate` (pre-select tanggal).
+- **Redesign Konsep Kategori ala Referensi Grid Ikon**:
+  - Menambahkan `CategoryIconHelper` dengan 50+ katalog ikon kategori Material terkurasi.
+  - Redesign `AddTransactionScreen` dengan tab segmentasi atas `[Pengeluaran] [Pemasukan] [Transfer]`, grid 4 kolom ikon bulat neo-brutalis + label nama, serta bottom bar cepat.
+  - **`AddCategoryDialog`**: menghapus seleksi Pengeluaran/Pemasukan (kategori bersifat fleksibel & type-agnostic), memperluas grid pemilih ikon dari katalog `CategoryIconHelper`.
+  - Menambahkan seeding 49+ default kategori lengkap, esensial & simpel di `AppDatabase` & `CategoryRepository` (mencakup bensin, motor, parkir, kos, air, wifi, skincare, obat, laundry, cicilan, sedekah, bonus, usaha, dll).
+  - Menghapus tombol toggle Pengeluaran/Pemasukan yang redundan di panel mengambang `_TransactionFormSheet` (tipe transaksi otomatis mengikuti tab yang sudah dipilih di atas, dilengkapi badge status di samping judul kategori).
+  - **Label Grup, Penamaan 1 Kata & Smart Sorting Tab (Opsi A)**:
+    - Seluruh penamaan kategori disederhanakan menjadi **1 kata** (contoh: Makan, Minum, Camilan, Bensin, Motor, Pulsa, WiFi, Listrik, Kos, Obat, Sekolah, Gaji, Bonus, dll).
+    - Menambahkan `CategoryGroupHelper` dengan fitur **Smart Sorting**:
+      - Saat tab **[Pengeluaran]**: Grup Kebutuhan Harian & Transportasi tampil paling atas.
+      - Saat tab **[Pemasukan]**: Grup **Sumber Pendapatan Utama (Gaji, Bonus, Usaha, Investasi, Kado, Sedekah)** otomatis meloncat ke paling atas untuk akses kilat.
+    - Grid pada `AddTransactionScreen` menampilkan header/label grup dengan garis pemisah horizontal neo-brutalis.
+  - **AI Smart Text Input & Menu Konfirmasi Tindakan**:
+    - Mengintegrasikan API kustom Route9 Gemini (`gemini-3.7-3.8`) pada `AIService` untuk pemrosesan teks bahasa alami berbahasa Indonesia.
+    - Menambahkan modal dialog canggih **`AITextModal`**:
+      - Kolom input teks bebas ("Beli nasi goreng 25rb pakai tunai", "Gajian 5jt masuk BCA", dll).
+      - Penyimpanan **Riwayat Teks Perintah** yang persisten di `SharedPreferences` (bisa diketuk ulang untuk auto-fill/re-run).
+      - **Menu Konfirmasi Tindakan**: Menampilkan kartu ringkasan hasil parsing (kategori, nominal, dompet, tipe, catatan) sebelum pengguna menyetujui penyimpanan ke database.
+    - Menghubungkan bottom bar *"Untuk apa dan berapa harganya?"* pada `AddTransactionScreen` langsung ke `AITextModal`.

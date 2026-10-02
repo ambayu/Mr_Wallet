@@ -29,6 +29,31 @@ class TransactionRepository {
     return maps.map((e) => TransactionModel.fromMap(e)).toList();
   }
 
+  // Query transactions strictly filtered by specific Month and Year
+  Future<List<TransactionModel>> getTransactionsByMonth(DateTime month) async {
+    final db = await _appDatabase.database;
+    final start = DateTime(month.year, month.month, 1).toIso8601String();
+    final end = DateTime(month.year, month.month + 1, 0, 23, 59, 59).toIso8601String();
+
+    final List<Map<String, dynamic>> maps = await db.rawQuery('''
+      SELECT 
+        t.*,
+        w1.name AS wallet_name,
+        w2.name AS to_wallet_name,
+        c.name AS category_name,
+        c.icon AS category_icon,
+        c.color AS category_color
+      FROM transactions t
+      LEFT JOIN wallets w1 ON t.wallet_id = w1.id
+      LEFT JOIN wallets w2 ON t.to_wallet_id = w2.id
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE t.transaction_date >= ? AND t.transaction_date <= ?
+      ORDER BY t.transaction_date DESC, t.created_at DESC
+    ''', [start, end]);
+
+    return maps.map((e) => TransactionModel.fromMap(e)).toList();
+  }
+
   Future<List<TransactionModel>> getTransactionsByWallet(String walletId) async {
     final db = await _appDatabase.database;
     final List<Map<String, dynamic>> maps = await db.rawQuery('''

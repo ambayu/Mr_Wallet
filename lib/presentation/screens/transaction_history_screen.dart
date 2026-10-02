@@ -1,14 +1,20 @@
+import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../../data/models/transaction_model.dart';
+import '../../data/models/wallet_model.dart';
 import '../providers/transaction_provider.dart';
-import '../widgets/dialogs/add_transaction_dialog.dart';
+import '../providers/wallet_provider.dart';
+import '../widgets/dialogs/header_wallet_picker_dialog.dart';
+import '../widgets/dialogs/wallet_list_modal.dart';
 import '../widgets/neo_card.dart';
-import '../widgets/neo_header_card.dart';
+import 'add_transaction_screen.dart';
+import 'wallet_detail_screen.dart';
 
 class TransactionHistoryScreen extends StatefulWidget {
   final String? initialWalletFilter;
@@ -22,13 +28,93 @@ class TransactionHistoryScreen extends StatefulWidget {
 
 class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   String _selectedTypeFilter = 'Semua'; // 'Semua', 'Pemasukan', 'Pengeluaran'
+  String _selectedWalletId = 'ALL'; // 'ALL' or specific wallet id
   String _searchQuery = '';
   final TextEditingController _searchController = TextEditingController();
+
+  // State Bulan & Tahun yang sedang dilihat
+  late DateTime _selectedMonth;
+
+  // State Dompet yang ditampilkan di Header (Maksimal 3)
+  List<String> _headerWalletIds = [];
+
+  @override
+  void initState() {
+    super.initState();
+    final now = DateTime.now();
+    _selectedMonth = DateTime(now.year, now.month, 1);
+    if (widget.initialWalletFilter != null) {
+      _selectedWalletId = widget.initialWalletFilter!;
+    }
+    _loadHeaderWalletsPref();
+  }
+
+  Future<void> _loadHeaderWalletsPref() async {
+    try {
+      final prefs = await SharedPreferences.getInstance();
+      final savedStr = prefs.getString(HeaderWalletPickerDialog.prefsKey);
+      if (savedStr != null) {
+        final decoded = jsonDecode(savedStr);
+        if (decoded is List) {
+          setState(() {
+            _headerWalletIds = decoded.map((e) => e.toString()).toList();
+          });
+        }
+      }
+    } catch (e) {
+      debugPrint('Error loading header wallet prefs: $e');
+    }
+  }
+
+  /// Mendapatkan maksimal 3 dompet untuk baris header
+  List<WalletModel> _resolveHeaderWallets(List<WalletModel> allWallets) {
+    if (allWallets.isEmpty) return [];
+
+    // Jika user sudah menyimpan pilihan di preferences
+    if (_headerWalletIds.isNotEmpty) {
+      final selectedList = <WalletModel>[];
+      for (final id in _headerWalletIds) {
+        final found = allWallets.where((w) => w.id == id).toList();
+        if (found.isNotEmpty) {
+          selectedList.add(found.first);
+        }
+      }
+
+      // Jika ada dompet yang dihapus sehingga kurang dari 3, isi dengan dompet lain yang belum terpilih
+      if (selectedList.length < 3 && selectedList.length < allWallets.length) {
+        for (final w in allWallets) {
+          if (!selectedList.any((sw) => sw.id == w.id)) {
+            selectedList.add(w);
+            if (selectedList.length == 3) break;
+          }
+        }
+      }
+
+      return selectedList.take(3).toList();
+    }
+
+    // Default: 3 dompet pertama
+    return allWallets.take(3).toList();
+  }
 
   @override
   void dispose() {
     _searchController.dispose();
     super.dispose();
+  }
+
+  /// Dialog Gabungan Pemilih Bulan & Tahun (Tahun di atas, Bulan di bawah)
+  Future<void> _showMonthYearPicker() async {
+    final pickedDate = await showDialog<DateTime>(
+      context: context,
+      builder: (ctx) => _MonthYearPickerDialog(initialDate: _selectedMonth),
+    );
+
+    if (pickedDate != null) {
+      setState(() {
+        _selectedMonth = pickedDate;
+      });
+    }
   }
 
   Color _getCategoryColor(String? catName, String type) {
@@ -38,6 +124,8 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     if (cat.contains('trans') || cat.contains('kendaraan')) return AppColors.skyBlue;
     if (cat.contains('kopi') || cat.contains('coffee')) return AppColors.softPeach;
     if (cat.contains('belanja') || cat.contains('shop')) return AppColors.bubblePink;
+    if (cat.contains('hiburan') || cat.contains('game')) return AppColors.bubblePink;
+    if (cat.contains('telepon') || cat.contains('pulsa')) return AppColors.skyBlue;
     return AppColors.lavenderPurple;
   }
 
@@ -48,23 +136,38 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     if (cat.contains('trans') || cat.contains('kendaraan')) return Icons.directions_bus_rounded;
     if (cat.contains('kopi') || cat.contains('coffee')) return Icons.coffee_rounded;
     if (cat.contains('belanja') || cat.contains('shop')) return Icons.shopping_bag_outlined;
-    if (cat.contains('hiburan')) return Icons.sports_esports_outlined;
-    if (cat.contains('tagihan')) return Icons.receipt_long_rounded;
+    if (cat.contains('hiburan') || cat.contains('game')) return Icons.sports_esports_outlined;
+    if (cat.contains('telepon') || cat.contains('pulsa')) return Icons.phone_android_rounded;
+    if (cat.contains('tagihan') || cat.contains('listrik')) return Icons.receipt_long_rounded;
     return Icons.category_rounded;
   }
 
-  Map<String, List<TransactionModel>> _groupTransactions(List<TransactionModel> list) {
+  Map<String, List<TransactionModel>> _groupTransactions(
+    List<TransactionModel> list,
+  ) {
     final Map<String, List<TransactionModel>> groups = {};
     final now = DateTime.now();
     final today = DateTime(now.year, now.month, now.day);
     final yesterday = today.subtract(const Duration(days: 1));
 
     for (var tx in list) {
-      // Filter by type
+      // 1. Filter strictly by the selected Month & Year
+      if (tx.date.year != _selectedMonth.year || tx.date.month != _selectedMonth.month) {
+        continue;
+      }
+
+      // 2. Filter by wallet container
+      if (_selectedWalletId != 'ALL') {
+        if (tx.walletId != _selectedWalletId && tx.toWalletId != _selectedWalletId) {
+          continue;
+        }
+      }
+
+      // 3. Filter by type
       if (_selectedTypeFilter == 'Pemasukan' && tx.type != 'INCOME') continue;
       if (_selectedTypeFilter == 'Pengeluaran' && tx.type != 'EXPENSE') continue;
 
-      // Filter by search
+      // 4. Filter by search
       if (_searchQuery.isNotEmpty) {
         final q = _searchQuery.toLowerCase();
         final desc = tx.description.toLowerCase();
@@ -75,11 +178,11 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       final txDate = DateTime(tx.date.year, tx.date.month, tx.date.day);
       String groupKey;
       if (txDate == today) {
-        groupKey = 'Hari ini, ${DateFormat('d MMM yyyy').format(tx.date)}';
+        groupKey = 'Hari ini, ${DateFormat('d MMMM yyyy', 'id_ID').format(tx.date)}';
       } else if (txDate == yesterday) {
-        groupKey = 'Kemarin, ${DateFormat('d MMM yyyy').format(tx.date)}';
+        groupKey = 'Kemarin, ${DateFormat('d MMMM yyyy', 'id_ID').format(tx.date)}';
       } else {
-        groupKey = DateFormat('EEEE, d MMM yyyy').format(tx.date);
+        groupKey = DateFormat('EEEE, d MMMM yyyy', 'id_ID').format(tx.date);
       }
 
       groups.putIfAbsent(groupKey, () => []).add(tx);
@@ -90,64 +193,418 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
   @override
   Widget build(BuildContext context) {
     final txProv = Provider.of<TransactionProvider>(context);
+    final walletProv = Provider.of<WalletProvider>(context);
     final grouped = _groupTransactions(txProv.transactions);
 
+    // Hitung akumulasi bulanan untuk bulan yang sedang dilihat (berdasarkan filter dompet jika dipilih)
+    double currentMonthIncome = 0.0;
+    double currentMonthExpense = 0.0;
+
+    for (var tx in txProv.transactions) {
+      if (tx.date.year == _selectedMonth.year && tx.date.month == _selectedMonth.month) {
+        if (_selectedWalletId != 'ALL') {
+          if (tx.walletId != _selectedWalletId && tx.toWalletId != _selectedWalletId) {
+            continue;
+          }
+        }
+
+        if (tx.type == 'INCOME') {
+          currentMonthIncome += tx.amount;
+        } else if (tx.type == 'EXPENSE') {
+          currentMonthExpense += tx.amount;
+        }
+      }
+    }
+
+    final currentMonthNet = currentMonthIncome - currentMonthExpense;
+    final onlyMonthFormatted = DateFormat('MMMM', 'id_ID').format(_selectedMonth);
+    final onlyYearFormatted = _selectedMonth.year.toString();
+
     return Scaffold(
-      backgroundColor: const Color(0xFFFEF8A7),
-      appBar: NeoHeaderCard(
-        title: 'Transaksi',
-        subtitle: 'Riwayat & pencatatan keuangan',
-        actions: [
-          GestureDetector(
-            onTap: () => AddTransactionDialog.show(context),
-            child: Container(
-              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-              decoration: BoxDecoration(
-                color: AppColors.primaryYellow,
-                borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: AppColors.borderBlack, width: 1.8),
-                boxShadow: const [
+      backgroundColor: const Color(0xFFD2EEFC), // Biru Muda Neo-Brutalist (Fresh & Kontras)
+      body: SafeArea(
+        child: Column(
+          children: [
+            // Custom Unified Top Ledger Table Header
+            Container(
+              decoration: const BoxDecoration(
+                color: AppColors.cardWhite,
+                border: Border(
+                  bottom: BorderSide(
+                    color: AppColors.borderBlack,
+                    width: 2.2,
+                  ),
+                ),
+                boxShadow: [
                   BoxShadow(
                     color: AppColors.shadowBlack,
-                    offset: Offset(1.5, 1.5),
+                    offset: Offset(0, 3.0),
                     blurRadius: 0,
                   ),
                 ],
               ),
-              child: const Row(
-                mainAxisSize: MainAxisSize.min,
+              child: Column(
                 children: [
-                  Icon(Icons.add_rounded, size: 18, color: AppColors.textBlack),
-                  SizedBox(width: 4),
-                  Text(
-                    'Catat',
-                    style: TextStyle(
-                      fontSize: 13,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textBlack,
+                  // ==========================================
+                  // BARIS 1: Bulan | Tahun | Pemasukan | Pengeluaran (Full Height, Tanpa Border Dalam)
+                  // ==========================================
+                SizedBox(
+                  height: 52,
+                  child: Row(
+                    children: [
+                      // 1. Pemilih Periode: Tahun di atas, Bulan di bawah (Satu Sel Tappable)
+                      Expanded(
+                        flex: 7,
+                        child: InkWell(
+                          onTap: _showMonthYearPicker,
+                          child: Padding(
+                            padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              crossAxisAlignment: CrossAxisAlignment.center,
+                              children: [
+                                Text(
+                                  onlyYearFormatted,
+                                  style: const TextStyle(
+                                    fontSize: 11,
+                                    fontWeight: FontWeight.w700,
+                                    color: AppColors.textMuted,
+                                    height: 1.1,
+                                  ),
+                                ),
+                                const SizedBox(height: 1),
+                                Row(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Flexible(
+                                      child: Text(
+                                        onlyMonthFormatted,
+                                        style: const TextStyle(
+                                          fontSize: 14.5,
+                                          fontWeight: FontWeight.w900,
+                                          color: AppColors.textBlack,
+                                          letterSpacing: -0.3,
+                                          height: 1.1,
+                                        ),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    const SizedBox(width: 2),
+                                    const Icon(Icons.arrow_drop_down_rounded, size: 18, color: AppColors.textBlack),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ),
+                        ),
+                      ),
+
+                      // Garis Vertikal Pembatas
+                      Container(width: 1.8, height: double.infinity, color: AppColors.borderBlack),
+
+                      // 3. Pemasukan (Label di atas, Angka di bawah)
+                      Expanded(
+                        flex: 5,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.arrow_downward_rounded, size: 11, color: Color(0xFF16A34A)),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    'Pemasukan',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.textBlack,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 1),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  CurrencyFormatter.formatRupiah(currentMonthIncome),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF16A34A),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+
+                      // Garis Vertikal Pembatas
+                      Container(width: 1.8, height: double.infinity, color: AppColors.borderBlack),
+
+                      // 4. Pengeluaran (Label di atas, Angka di bawah)
+                      Expanded(
+                        flex: 5,
+                        child: Padding(
+                          padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            crossAxisAlignment: CrossAxisAlignment.center,
+                            children: [
+                              const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.arrow_upward_rounded, size: 11, color: Color(0xFFDC2626)),
+                                  SizedBox(width: 2),
+                                  Text(
+                                    'Pengeluaran',
+                                    style: TextStyle(
+                                      fontSize: 10,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.textBlack,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              const SizedBox(height: 1),
+                              FittedBox(
+                                fit: BoxFit.scaleDown,
+                                child: Text(
+                                  CurrencyFormatter.formatRupiah(currentMonthExpense),
+                                  style: const TextStyle(
+                                    fontSize: 13,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFFDC2626),
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+
+                // ==========================================
+                // HR: Garis Pembatas Horizontal Penuh (Full Width)
+                // ==========================================
+                Container(
+                  height: 1.8,
+                  width: double.infinity,
+                  color: AppColors.borderBlack,
+                ),
+
+                // ==========================================
+                // BARIS 2: Ikon [Lihat Dompet] + Maks 3 Dompet + Ikon [Lainnya]
+                // ==========================================
+                Builder(
+                  builder: (context) {
+                    final displayWallets = _resolveHeaderWallets(walletProv.wallets);
+                    final hasMoreThan3 = walletProv.wallets.length > 3;
+
+                    final rowChildren = <Widget>[
+                      // Tombol Ikon [Lihat Dompet] (Membuka Modal List Dompet & Total Uangnya)
+                      _buildHeaderIconButton(
+                        icon: Icons.account_balance_wallet_rounded,
+                        backgroundColor: AppColors.butterYellow,
+                        onTap: () {
+                          WalletListModal.show(
+                            context,
+                            selectedWalletId: _selectedWalletId,
+                            onSelectWallet: (id) => setState(() => _selectedWalletId = id),
+                          );
+                        },
+                      ),
+                      _buildHeaderVerticalDivider(1.8),
+                    ];
+
+                    // Maksimal 3 Dompet Terpilih di Header — dibagi rata (justify) memenuhi lebar
+                    for (final w in displayWallets) {
+                      rowChildren.add(
+                        Expanded(
+                          child: _buildWalletItem(
+                            wallet: w,
+                            isSelected: _selectedWalletId == w.id,
+                            onTap: () {
+                              setState(() {
+                                // Toggle: kalau diklik lagi saat aktif, kembali ke semua dompet
+                                if (_selectedWalletId == w.id) {
+                                  _selectedWalletId = 'ALL';
+                                } else {
+                                  _selectedWalletId = w.id;
+                                }
+                              });
+                            },
+                            onLongPress: () {
+                              Navigator.push(
+                                context,
+                                MaterialPageRoute(
+                                  builder: (_) => WalletDetailScreen(wallet: w),
+                                ),
+                              );
+                            },
+                          ),
+                        ),
+                      );
+                      rowChildren.add(_buildHeaderVerticalDivider(1.6));
+                    }
+
+                    // Tombol Ikon [Lainnya] jika dompet > 3 untuk mengatur dompet mana yang tampil di header
+                    if (hasMoreThan3) {
+                      rowChildren.add(
+                        _buildHeaderIconButton(
+                          icon: Icons.tune_rounded,
+                          backgroundColor: const Color(0xFFF1F5F9),
+                          onTap: () {
+                            HeaderWalletPickerDialog.show(
+                              context,
+                              allWallets: walletProv.wallets,
+                              currentSelectedIds: displayWallets.map((w) => w.id).toList(),
+                              onSaved: (selectedIds) {
+                                setState(() {
+                                  _headerWalletIds = selectedIds;
+                                });
+                              },
+                            );
+                          },
+                        ),
+                      );
+                      rowChildren.add(_buildHeaderVerticalDivider(1.6));
+                    }
+
+                    return Container(
+                      height: 48,
+                      color: const Color(0xFFF9FAFC),
+                      child: Row(children: rowChildren),
+                    );
+                  },
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 8),
+
+          // Baris Aksi Cepat: Sisa Saldo Bulan Ini + Filter Tipe + Tombol Catat Transaksi
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 14),
+            child: Row(
+              children: [
+                  // Sisa Saldo Badge
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardWhite,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.borderBlack, width: 1.6),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.shadowBlack,
+                          offset: Offset(1.5, 1.5),
+                          blurRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        const Text(
+                          'Sisa: ',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: AppColors.textBlack),
+                        ),
+                        Text(
+                          currentMonthNet < 0
+                              ? '- ${CurrencyFormatter.formatShort(currentMonthNet.abs())}'
+                              : CurrencyFormatter.formatShort(currentMonthNet),
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: FontWeight.w900,
+                            color: currentMonthNet >= 0
+                                ? const Color(0xFF16A34A)
+                                : const Color(0xFFDC2626),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+
+                  // Filter Pills: [Semua] [Masuk] [Keluar]
+                  _buildFilterPill('Semua'),
+                  const SizedBox(width: 4),
+                  _buildFilterPill('Pemasukan'),
+                  const SizedBox(width: 4),
+                  _buildFilterPill('Pengeluaran'),
+                  const Spacer(),
+
+                  // Tombol + Catat
+                  GestureDetector(
+                    onTap: () => Navigator.push(
+                      context,
+                      MaterialPageRoute(
+                        builder: (_) => AddTransactionScreen(
+                          initialDate: DateTime(
+                            _selectedMonth.year,
+                            _selectedMonth.month,
+                            DateTime.now().month == _selectedMonth.month ? DateTime.now().day : 1,
+                          ),
+                        ),
+                      ),
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryYellow,
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: AppColors.shadowBlack,
+                            offset: Offset(1.5, 1.5),
+                            blurRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.add_rounded, size: 15, color: AppColors.textBlack),
+                          SizedBox(width: 3),
+                          Text(
+                            'Catat',
+                            style: TextStyle(
+                              fontSize: 11.5,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textBlack,
+                            ),
+                          ),
+                        ],
+                      ),
                     ),
                   ),
                 ],
               ),
             ),
-          ),
-        ],
-      ),
-      body: SafeArea(
-        child: Column(
-          children: [
-            // Search Input matching Showcase Screen 5
+            const SizedBox(height: 6),
+
+            // Search Bar Ramping
             Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 6),
+              padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Container(
+                height: 38,
                 decoration: BoxDecoration(
                   color: AppColors.cardWhite,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                  borderRadius: BorderRadius.circular(14),
+                  border: Border.all(color: AppColors.borderBlack, width: 1.6),
                   boxShadow: const [
                     BoxShadow(
                       color: AppColors.shadowBlack,
-                      offset: Offset(2, 2.5),
+                      offset: Offset(1.5, 1.5),
                       blurRadius: 0,
                     ),
                   ],
@@ -156,42 +613,27 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   controller: _searchController,
                   onChanged: (val) => setState(() => _searchQuery = val),
                   style: const TextStyle(
-                    fontSize: 14,
+                    fontSize: 13,
                     fontWeight: FontWeight.w700,
                     color: AppColors.textBlack,
                   ),
                   decoration: const InputDecoration(
-                    hintText: 'Cari transaksi...',
+                    hintText: 'Cari catatan transaksi...',
                     hintStyle: TextStyle(
                       color: AppColors.textMuted,
                       fontWeight: FontWeight.w500,
-                      fontSize: 14,
+                      fontSize: 12,
                     ),
-                    prefixIcon: Icon(Icons.search_rounded, color: AppColors.textBlack, size: 22),
+                    prefixIcon: Icon(Icons.search_rounded, color: AppColors.textBlack, size: 18),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
                   ),
                 ),
               ),
             ),
-            const SizedBox(height: 10),
+            const SizedBox(height: 4),
 
-            // Filter pills: [Semua] [Pemasukan] [Pengeluaran]
-            Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 20),
-              child: Row(
-                children: [
-                  _buildFilterPill('Semua'),
-                  const SizedBox(width: 8),
-                  _buildFilterPill('Pemasukan'),
-                  const SizedBox(width: 8),
-                  _buildFilterPill('Pengeluaran'),
-                ],
-              ),
-            ),
-            const SizedBox(height: 14),
-
-            // Grouped Transaction List
+            // 3. Grouped Transaction List
             Expanded(
               child: grouped.isEmpty
                   ? Center(
@@ -200,24 +642,62 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                         children: [
                           Image.asset(
                             AppAssets.mascotThinking,
-                            width: 110,
-                            height: 110,
+                            width: 90,
+                            height: 90,
                             fit: BoxFit.contain,
                           ),
-                          const SizedBox(height: 12),
-                          const Text(
-                            'Belum ada transaksi yang sesuai',
-                            style: TextStyle(
-                              fontSize: 14,
+                          const SizedBox(height: 10),
+                          Text(
+                            'Belum ada transaksi di ${DateFormat('MMMM yyyy', 'id_ID').format(_selectedMonth)}',
+                            style: const TextStyle(
+                              fontSize: 13,
                               fontWeight: FontWeight.w800,
                               color: AppColors.textBlack,
+                            ),
+                          ),
+                          const SizedBox(height: 8),
+                          GestureDetector(
+                            onTap: () => Navigator.push(
+                              context,
+                              MaterialPageRoute(
+                                builder: (_) => AddTransactionScreen(
+                                  initialDate: DateTime(
+                                    _selectedMonth.year,
+                                    _selectedMonth.month,
+                                    1,
+                                  ),
+                                ),
+                              ),
+                            ),
+                            child: Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 7),
+                              decoration: BoxDecoration(
+                                color: AppColors.mintGreen,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                                boxShadow: const [
+                                  BoxShadow(
+                                    color: AppColors.shadowBlack,
+                                    offset: Offset(1.5, 2),
+                                    blurRadius: 0,
+                                  ),
+                                ],
+                              ),
+                              child: const Text(
+                                '+ Catat di Bulan Ini',
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w900,
+                                  color: AppColors.textBlack,
+                                ),
+                              ),
                             ),
                           ),
                         ],
                       ),
                     )
                   : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 4),
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
                       itemCount: grouped.keys.length,
                       itemBuilder: (context, index) {
                         final dateHeader = grouped.keys.elementAt(index);
@@ -226,18 +706,33 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                         return Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // Header Tanggal Lebih Jelas, Tegas & Beraksen Neo-Brutalist
                             Padding(
-                              padding: const EdgeInsets.only(top: 10, bottom: 8),
-                              child: Text(
-                                dateHeader,
-                                style: const TextStyle(
-                                  fontSize: 13,
-                                  fontWeight: FontWeight.w800,
-                                  color: AppColors.textBlack,
-                                ),
+                              padding: const EdgeInsets.only(top: 8, bottom: 6),
+                              child: Row(
+                                children: [
+                                  Container(
+                                    width: 7,
+                                    height: 7,
+                                    decoration: const BoxDecoration(
+                                      color: AppColors.textBlack,
+                                      shape: BoxShape.circle,
+                                    ),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Text(
+                                    dateHeader,
+                                    style: const TextStyle(
+                                      fontSize: 12.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.textBlack,
+                                      letterSpacing: -0.2,
+                                    ),
+                                  ),
+                                ],
                               ),
                             ),
-                            ...txList.map((tx) => _buildTransactionTile(tx)),
+                            ...txList.map((tx) => _buildTransactionCard(tx)),
                           ],
                         );
                       },
@@ -249,98 +744,560 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     );
   }
 
+  /// Tombol ikon di Baris 2 header (lebar tetap agar konsisten & efisien)
+  Widget _buildHeaderIconButton({
+    required IconData icon,
+    required Color backgroundColor,
+    required VoidCallback onTap,
+  }) {
+    return InkWell(
+      onTap: onTap,
+      child: Container(
+        width: 44,
+        height: double.infinity,
+        color: backgroundColor,
+        alignment: Alignment.center,
+        child: Icon(icon, size: 20, color: AppColors.textBlack),
+      ),
+    );
+  }
+
+  /// Garis pembatas vertikal Baris 2 header
+  Widget _buildHeaderVerticalDivider(double width) {
+    return Container(
+      width: width,
+      height: double.infinity,
+      color: AppColors.borderBlack,
+    );
+  }
+
+  /// Item Dompet di Baris Bawah Header (mengisi lebar secara justify)
+  Widget _buildWalletItem({
+    required dynamic wallet,
+    required bool isSelected,
+    required VoidCallback onTap,
+    required VoidCallback onLongPress,
+  }) {
+    final name = wallet.name as String;
+    final bal = wallet.balance as double;
+
+    return InkWell(
+      onTap: onTap,
+      onLongPress: onLongPress,
+      child: Container(
+        height: double.infinity,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        alignment: Alignment.center,
+        color: isSelected ? AppColors.butterYellow : Colors.transparent,
+        child: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          crossAxisAlignment: CrossAxisAlignment.center,
+          children: [
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              mainAxisAlignment: MainAxisAlignment.center,
+              children: [
+                if (isSelected) ...[
+                  Container(
+                    width: 6,
+                    height: 6,
+                    decoration: const BoxDecoration(
+                      color: AppColors.textBlack,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                ],
+                Flexible(
+                  child: Text(
+                    name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                      color: AppColors.textBlack,
+                    ),
+                  ),
+                ),
+              ],
+            ),
+            Text(
+              CurrencyFormatter.formatShort(bal),
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 9.5,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textMuted,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   Widget _buildFilterPill(String label) {
     final isSelected = _selectedTypeFilter == label;
+    final shortLabel = label == 'Pemasukan'
+        ? 'Masuk'
+        : label == 'Pengeluaran'
+            ? 'Keluar'
+            : label;
+
     return GestureDetector(
       onTap: () => setState(() => _selectedTypeFilter = label),
       child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 8),
+        height: 28,
+        padding: const EdgeInsets.symmetric(horizontal: 8),
+        alignment: Alignment.center,
         decoration: BoxDecoration(
-          color: isSelected ? AppColors.bubblePink : AppColors.cardWhite,
-          borderRadius: BorderRadius.circular(20),
-          border: Border.all(color: AppColors.borderBlack, width: 1.8),
+          color: isSelected ? AppColors.textBlack : AppColors.cardWhite,
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: AppColors.borderBlack, width: 1.5),
           boxShadow: isSelected
-              ? const [
+              ? null
+              : const [
                   BoxShadow(
                     color: AppColors.shadowBlack,
-                    offset: Offset(1.5, 2),
+                    offset: Offset(1.2, 1.2),
                     blurRadius: 0,
                   ),
-                ]
-              : null,
+                ],
         ),
         child: Text(
-          label,
+          shortLabel,
           style: TextStyle(
-            fontSize: 12.5,
-            fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-            color: AppColors.textBlack,
+            fontSize: 11,
+            fontWeight: FontWeight.w800,
+            color: isSelected ? Colors.white : AppColors.textBlack,
           ),
         ),
       ),
     );
   }
 
-  Widget _buildTransactionTile(TransactionModel tx) {
+  Widget _buildTransactionCard(TransactionModel tx) {
     final isIncome = tx.type == 'INCOME';
-    final iconColor = _getCategoryColor(tx.categoryName, tx.type);
-    final iconData = _getCategoryIcon(tx.categoryName, tx.type);
-    final timeStr = DateFormat('HH:mm').format(tx.date);
+    final isTransfer = tx.type == 'TRANSFER';
+    final isAdjustment = tx.type == 'ADJUSTMENT';
 
-    return NeoCard(
-      margin: const EdgeInsets.only(bottom: 10),
-      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-      backgroundColor: AppColors.cardWhite,
-      borderRadius: 18,
-      borderWidth: 1.8,
-      child: Row(
+    final categoryColor = _getCategoryColor(tx.categoryName, tx.type);
+    final categoryIcon = _getCategoryIcon(tx.categoryName, tx.type);
+
+    return Dismissible(
+      key: Key(tx.id),
+      direction: DismissDirection.endToStart,
+      background: Container(
+        alignment: Alignment.centerRight,
+        padding: const EdgeInsets.only(right: 20),
+        decoration: BoxDecoration(
+          color: AppColors.dangerRed,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: const Icon(Icons.delete_outline, color: Colors.white),
+      ),
+      confirmDismiss: (direction) async {
+        return await showDialog(
+          context: context,
+          builder: (ctx) => AlertDialog(
+            title: const Text('Hapus Transaksi?'),
+            content: const Text('Tindakan ini akan mengembalikan saldo seperti semula.'),
+            actions: [
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, false),
+                child: const Text('Batal'),
+              ),
+              TextButton(
+                onPressed: () => Navigator.pop(ctx, true),
+                child: const Text('Hapus', style: TextStyle(color: Colors.red)),
+              ),
+            ],
+          ),
+        );
+      },
+      onDismissed: (direction) {
+        Provider.of<TransactionProvider>(context, listen: false)
+            .deleteTransaction(tx);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transaksi berhasil dihapus')),
+        );
+      },
+      child: Padding(
+        padding: const EdgeInsets.only(bottom: 7),
+        child: NeoCard(
+          backgroundColor: AppColors.cardWhite,
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+          borderRadius: 16,
+          borderWidth: 1.8,
+          child: Row(
+            children: [
+              // Category Icon Container
+              Container(
+                width: 40,
+                height: 40,
+                decoration: BoxDecoration(
+                  color: isTransfer
+                      ? AppColors.skyBlue
+                      : isAdjustment
+                          ? AppColors.softPeach
+                          : categoryColor,
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: AppColors.borderBlack, width: 1.6),
+                ),
+                child: Icon(
+                  isTransfer
+                      ? Icons.sync_alt_rounded
+                      : isAdjustment
+                          ? Icons.published_with_changes_rounded
+                          : categoryIcon,
+                  size: 20,
+                  color: AppColors.textBlack,
+                ),
+              ),
+              const SizedBox(width: 10),
+
+              // Title, Wallet & Subtitle
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      tx.description.isNotEmpty
+                          ? tx.description
+                          : (tx.categoryName ?? 'Transaksi'),
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textBlack,
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Row(
+                      children: [
+                        Text(
+                          DateFormat('HH:mm').format(tx.date),
+                          style: const TextStyle(
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMuted,
+                          ),
+                        ),
+                        const SizedBox(width: 6),
+                        Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                          decoration: BoxDecoration(
+                            color: AppColors.pillGray,
+                            borderRadius: BorderRadius.circular(6),
+                            border: Border.all(color: AppColors.borderBlack, width: 0.8),
+                          ),
+                          child: Text(
+                            isTransfer
+                                ? '${tx.walletName ?? 'Dompet'} ➔ ${tx.toWalletName ?? 'Akun'}'
+                                : tx.walletName ?? 'Dompet',
+                            style: const TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w700,
+                              color: AppColors.textBlack,
+                            ),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ],
+                ),
+              ),
+
+              // Amount Nominal
+              Column(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(tx.amount)}',
+                    style: TextStyle(
+                      fontSize: 13.5,
+                      fontWeight: FontWeight.w900,
+                      color: isIncome
+                          ? const Color(0xFF16A34A)
+                          : isTransfer
+                              ? AppColors.textBlack
+                              : const Color(0xFFDC2626),
+                    ),
+                  ),
+                  if (tx.subType == 'LOST_MONEY') ...[
+                    const SizedBox(height: 2),
+                    const Text(
+                      'Uang Hilang',
+                      style: TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.dangerRed,
+                      ),
+                    ),
+                  ],
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// Dialog pemilih Periode gabungan (Tahun di atas berupa strip horizontal, Bulan di bawah berupa grid 3x4).
+class _MonthYearPickerDialog extends StatefulWidget {
+  final DateTime initialDate;
+
+  const _MonthYearPickerDialog({required this.initialDate});
+
+  @override
+  State<_MonthYearPickerDialog> createState() => _MonthYearPickerDialogState();
+}
+
+class _MonthYearPickerDialogState extends State<_MonthYearPickerDialog> {
+  static const int _yearsBefore = 30;
+  static const int _yearsAfter = 10;
+  static const double _chipWidth = 74.0;
+
+  late int _selectedYear;
+  late int _selectedMonth;
+  late final int _currentYear;
+  late final int _minYear;
+  late final int _maxYear;
+  late final ScrollController _scrollController;
+
+  final List<String> _monthNames = const [
+    'Januari', 'Februari', 'Maret', 'April', 'Mei', 'Juni',
+    'Juli', 'Agustus', 'September', 'Oktober', 'November', 'Desember',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _selectedYear = widget.initialDate.year;
+    _selectedMonth = widget.initialDate.month;
+    _currentYear = DateTime.now().year;
+    _minYear = _currentYear - _yearsBefore;
+    _maxYear = _currentYear + _yearsAfter;
+
+    final selectedIndex = _selectedYear - _minYear;
+    final initialOffset = (selectedIndex * (_chipWidth + 8)) - 100.0;
+    _scrollController = ScrollController(
+      initialScrollOffset: initialOffset < 0 ? 0 : initialOffset,
+    );
+  }
+
+  @override
+  void dispose() {
+    _scrollController.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AlertDialog(
+      backgroundColor: AppColors.butterYellow,
+      shape: RoundedRectangleBorder(
+        borderRadius: BorderRadius.circular(22),
+        side: const BorderSide(color: AppColors.borderBlack, width: 2.2),
+      ),
+      titlePadding: const EdgeInsets.fromLTRB(20, 18, 20, 10),
+      contentPadding: const EdgeInsets.fromLTRB(20, 0, 20, 20),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Container(
-            width: 44,
-            height: 44,
-            decoration: BoxDecoration(
-              color: iconColor,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.borderBlack, width: 1.8),
-            ),
-            child: Icon(iconData, color: AppColors.textBlack, size: 22),
-          ),
-          const SizedBox(width: 14),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  tx.description.isNotEmpty ? tx.description : (tx.categoryName ?? 'Transaksi'),
-                  style: const TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textBlack,
-                  ),
-                  maxLines: 1,
-                  overflow: TextOverflow.ellipsis,
-                ),
-                const SizedBox(height: 2),
-                Text(
-                  timeStr,
-                  style: const TextStyle(
-                    fontSize: 11,
-                    fontWeight: FontWeight.w600,
-                    color: AppColors.textMuted,
-                  ),
-                ),
-              ],
-            ),
-          ),
-          Text(
-            '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(tx.amount)}',
+          const Text(
+            'Pilih Periode',
             style: TextStyle(
-              fontSize: 14,
+              fontSize: 16.5,
               fontWeight: FontWeight.w900,
-              color: isIncome ? AppColors.successGreen : AppColors.dangerRed,
+              color: AppColors.textBlack,
+            ),
+          ),
+          GestureDetector(
+            onTap: () => Navigator.pop(context),
+            child: Container(
+              padding: const EdgeInsets.all(4),
+              decoration: BoxDecoration(
+                color: AppColors.cardWhite,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderBlack, width: 1.5),
+              ),
+              child: const Icon(Icons.close, size: 16, color: AppColors.textBlack),
             ),
           ),
         ],
+      ),
+      content: SizedBox(
+        width: 320,
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Label Section Tahun
+            const Text(
+              'Tahun:',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Strip Horizontal Pilihan Tahun
+            SizedBox(
+              height: 42,
+              child: ListView.builder(
+                controller: _scrollController,
+                scrollDirection: Axis.horizontal,
+                itemCount: _maxYear - _minYear + 1,
+                itemBuilder: (context, idx) {
+                  final year = _minYear + idx;
+                  final isSelected = _selectedYear == year;
+                  final isCurrentYear = _currentYear == year;
+
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 8),
+                    child: GestureDetector(
+                      onTap: () {
+                        setState(() {
+                          _selectedYear = year;
+                        });
+                      },
+                      child: Container(
+                        width: _chipWidth,
+                        alignment: Alignment.center,
+                        decoration: BoxDecoration(
+                          color: isSelected
+                              ? AppColors.primaryYellow
+                              : AppColors.cardWhite,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(
+                            color: AppColors.borderBlack,
+                            width: isSelected ? 2.2 : 1.4,
+                          ),
+                          boxShadow: isSelected
+                              ? const [
+                                  BoxShadow(
+                                    color: AppColors.shadowBlack,
+                                    offset: Offset(1.5, 1.5),
+                                    blurRadius: 0,
+                                  ),
+                                ]
+                              : null,
+                        ),
+                        child: Row(
+                          mainAxisAlignment: MainAxisAlignment.center,
+                          children: [
+                            Text(
+                              '$year',
+                              style: TextStyle(
+                                fontSize: 13,
+                                fontWeight: isSelected
+                                    ? FontWeight.w900
+                                    : FontWeight.w700,
+                                color: AppColors.textBlack,
+                              ),
+                            ),
+                            if (isCurrentYear) ...[
+                              const SizedBox(width: 3),
+                              Container(
+                                width: 5,
+                                height: 5,
+                                decoration: const BoxDecoration(
+                                  color: Color(0xFF16A34A),
+                                  shape: BoxShape.circle,
+                                ),
+                              ),
+                            ],
+                          ],
+                        ),
+                      ),
+                    ),
+                  );
+                },
+              ),
+            ),
+            const SizedBox(height: 16),
+
+            // Label Section Bulan
+            const Text(
+              'Bulan:',
+              style: TextStyle(
+                fontSize: 12,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 6),
+
+            // Grid 3x4 Pilihan Bulan
+            GridView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: 12,
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 3,
+                mainAxisSpacing: 8,
+                crossAxisSpacing: 8,
+                childAspectRatio: 2.1,
+              ),
+              itemBuilder: (context, idx) {
+                final monthNum = idx + 1;
+                final isSelected = _selectedMonth == monthNum &&
+                    _selectedYear == widget.initialDate.year;
+
+                return GestureDetector(
+                  onTap: () {
+                    // Tap bulan langsung konfirmasi dan tutup dialog
+                    Navigator.pop(
+                      context,
+                      DateTime(_selectedYear, monthNum, 1),
+                    );
+                  },
+                  child: Container(
+                    decoration: BoxDecoration(
+                      color: isSelected
+                          ? AppColors.mintGreen
+                          : AppColors.cardWhite,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(
+                        color: AppColors.borderBlack,
+                        width: isSelected ? 2.2 : 1.4,
+                      ),
+                      boxShadow: isSelected
+                          ? const [
+                              BoxShadow(
+                                color: AppColors.shadowBlack,
+                                offset: Offset(1.5, 1.5),
+                              ),
+                            ]
+                          : null,
+                    ),
+                    child: Center(
+                      child: Text(
+                        _monthNames[idx],
+                        style: TextStyle(
+                          fontSize: 12,
+                          fontWeight: isSelected
+                              ? FontWeight.w900
+                              : FontWeight.w700,
+                          color: AppColors.textBlack,
+                        ),
+                      ),
+                    ),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
       ),
     );
   }

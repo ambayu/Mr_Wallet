@@ -50,6 +50,26 @@ class TransactionProvider extends ChangeNotifier {
     }
   }
 
+  Future<void> addCategory(CategoryModel category) async {
+    await _categoryRepository.insertCategory(category);
+    _categories = await _categoryRepository.getAllCategories();
+    notifyListeners();
+  }
+
+  Future<List<TransactionModel>> getTransactionsForMonth(DateTime month) async {
+    return await _transactionRepository.getTransactionsByMonth(month);
+  }
+
+  Future<Map<String, double>> getMonthlySummaryFor(DateTime month) async {
+    final spending = await _transactionRepository.getMonthlySpending(month);
+    final income = await _transactionRepository.getMonthlyIncome(month);
+    return {
+      'expense': spending,
+      'income': income,
+      'net': income - spending,
+    };
+  }
+
   Future<void> refreshTransactions() async {
     final now = DateTime.now();
     _recentTransactions = await _transactionRepository.getRecentTransactions(limit: 30);
