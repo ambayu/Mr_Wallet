@@ -14,6 +14,7 @@ class NeoCard extends StatelessWidget {
   final double? width;
   final double? height;
   final VoidCallback? onTap;
+  final bool clipBehavior;
 
   const NeoCard({
     super.key,
@@ -29,10 +30,25 @@ class NeoCard extends StatelessWidget {
     this.width,
     this.height,
     this.onTap,
+    this.clipBehavior = true,
   });
 
   @override
   Widget build(BuildContext context) {
+    Widget content = Padding(
+      padding: padding,
+      child: child,
+    );
+
+    if (clipBehavior) {
+      content = ClipRRect(
+        borderRadius: BorderRadius.circular(
+          borderRadius > borderWidth ? borderRadius - borderWidth : borderRadius,
+        ),
+        child: content,
+      );
+    }
+
     Widget card = Container(
       margin: margin,
       width: width,
@@ -51,15 +67,7 @@ class NeoCard extends StatelessWidget {
                 ),
               ],
       ),
-      child: ClipRRect(
-        borderRadius: BorderRadius.circular(
-          borderRadius > borderWidth ? borderRadius - borderWidth : borderRadius,
-        ),
-        child: Padding(
-          padding: padding,
-          child: child,
-        ),
-      ),
+      child: content,
     );
 
     if (onTap != null) {

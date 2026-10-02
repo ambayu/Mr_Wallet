@@ -65,6 +65,7 @@ class WalletsScreen extends StatelessWidget {
                 backgroundColor: const Color(0xFFD4F8C4),
                 borderRadius: 24,
                 borderWidth: 2.2,
+                clipBehavior: false,
                 padding: const EdgeInsets.fromLTRB(18, 16, 0, 0),
                 child: Stack(
                   clipBehavior: Clip.none,
@@ -99,14 +100,14 @@ class WalletsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Mascot Crab Celebration Confetti
+                    // Mascot Crab Celebration Confetti (tembus/nongol ke atas border card)
                     Positioned(
                       right: 4,
-                      bottom: -10,
+                      bottom: -8,
                       child: Image.asset(
                         AppAssets.mascotConfetti,
-                        width: 125,
-                        height: 125,
+                        width: 135,
+                        height: 135,
                         fit: BoxFit.contain,
                       ),
                     ),
@@ -158,14 +159,16 @@ class WalletsScreen extends StatelessWidget {
                 fallbackIcon: Icons.shield_rounded,
                 iconBg: const Color(0xFFD6F0FF),
               ),
-              const SizedBox(height: 18),
+              const SizedBox(height: 28),
 
               // 4. Mascot Tropical Vacation Card
               NeoCard(
+                width: double.infinity,
                 backgroundColor: const Color(0xFFFFEB85),
                 borderRadius: 24,
                 borderWidth: 2.2,
-                padding: const EdgeInsets.fromLTRB(16, 16, 0, 0),
+                clipBehavior: false,
+                padding: const EdgeInsets.fromLTRB(16, 20, 0, 0),
                 child: Stack(
                   clipBehavior: Clip.none,
                   children: [
@@ -186,10 +189,10 @@ class WalletsScreen extends StatelessWidget {
                         ],
                       ),
                     ),
-                    // Mascot Crab Tropical Vacation on Float
+                    // Mascot Crab Tropical Vacation on Float (tembus/nongol ke luar card)
                     Positioned(
-                      right: 0,
-                      bottom: -15,
+                      right: -8,
+                      bottom: -28,
                       child: Image.asset(
                         AppAssets.mascotTropical,
                         width: 145,
