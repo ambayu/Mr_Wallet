@@ -147,13 +147,13 @@ class AppDatabase {
       // 5. Savings Goals table (Pencapaian / Target Tabungan)
       await _createSavingsGoalsTable(txn);
 
-      // Seed Initial Wallets
+      // Seed Initial Default Wallets dengan saldo 0 (Fresh Start)
       final now = DateTime.now().toIso8601String();
       await txn.insert('wallets', {
         'id': 'w_cash',
         'name': 'Dompet Tunai',
         'type': 'CASH',
-        'balance': 350000.0,
+        'balance': 0.0,
         'icon': 'payments',
         'color': '#FFF0B3', // Yellow Pastel
         'is_default': 1,
@@ -164,7 +164,7 @@ class AppDatabase {
         'id': 'w_bca',
         'name': 'ATM BCA',
         'type': 'BANK',
-        'balance': 2500000.0,
+        'balance': 0.0,
         'icon': 'account_balance',
         'color': '#BFF2A5', // Mint Lime Green
         'is_default': 0,
@@ -175,7 +175,7 @@ class AppDatabase {
         'id': 'w_mandiri',
         'name': 'ATM Mandiri',
         'type': 'BANK',
-        'balance': 1200000.0,
+        'balance': 0.0,
         'icon': 'credit_card',
         'color': '#FFBEE3', // Pink
         'is_default': 0,
@@ -186,7 +186,7 @@ class AppDatabase {
         'id': 'w_gopay',
         'name': 'GoPay / E-Wallet',
         'type': 'EWALLET',
-        'balance': 150000.0,
+        'balance': 0.0,
         'icon': 'phone_android',
         'color': '#A594F9', // Lavender
         'is_default': 0,
@@ -196,94 +196,6 @@ class AppDatabase {
       // Seed Default Categories (Katalog Kategori Lengkap)
       for (final cat in defaultCategoriesList) {
         await txn.insert('categories', cat);
-      }
-
-      // Seed Initial Sample Transactions
-      await txn.insert('transactions', {
-        'id': 'tx_1',
-        'wallet_id': 'w_cash',
-        'category_id': 'c_food',
-        'type': 'EXPENSE',
-        'amount': 25000.0,
-        'sub_type': 'REGULAR',
-        'description': 'Kopi Susu & Sarapan',
-        'transaction_date': DateTime.now().subtract(const Duration(hours: 2)).toIso8601String(),
-        'created_at': now,
-      });
-
-      await txn.insert('transactions', {
-        'id': 'tx_2',
-        'wallet_id': 'w_bca',
-        'category_id': 'c_shop',
-        'type': 'EXPENSE',
-        'amount': 150000.0,
-        'sub_type': 'REGULAR',
-        'description': 'Belanja Bulanan Supermarket',
-        'transaction_date': DateTime.now().subtract(const Duration(days: 1)).toIso8601String(),
-        'created_at': now,
-      });
-
-      // Seed Initial Sample Tasks
-      await txn.insert('tasks', {
-        'id': 'tsk_1',
-        'title': 'Bayar Tagihan Listrik PLN',
-        'description': 'Bayar via ATM Mandiri sebelum tanggal 20',
-        'priority': 'HIGH',
-        'status': 'PENDING',
-        'due_date': DateTime.now().add(const Duration(days: 1, hours: 4)).toIso8601String(),
-        'estimated_amount': 250000.0,
-        'wallet_id': 'w_mandiri',
-        'created_at': now,
-      });
-
-      await txn.insert('tasks', {
-        'id': 'tsk_2',
-        'title': 'Servis Motor & Ganti Oli',
-        'description': 'Bawa ke bengkel resmi',
-        'priority': 'MEDIUM',
-        'status': 'PENDING',
-        'due_date': DateTime.now().add(const Duration(days: 2)).toIso8601String(),
-        'estimated_amount': 120000.0,
-        'wallet_id': 'w_cash',
-        'created_at': now,
-      });
-
-      // Seed Initial Savings Goals (Pencapaian)
-      final savingsGoals = [
-        {
-          'id': 'sg_japan',
-          'name': 'Liburan ke Jepang',
-          'target_amount': 15000000.0,
-          'saved_amount': 8000000.0,
-          'deadline': null,
-          'icon': 'flight_takeoff',
-          'color': '#D6F0FF',
-          'created_at': now,
-        },
-        {
-          'id': 'sg_laptop',
-          'name': 'Beli Laptop',
-          'target_amount': 12000000.0,
-          'saved_amount': 2500000.0,
-          'deadline': null,
-          'icon': 'laptop_mac',
-          'color': '#D6F0FF',
-          'created_at': now,
-        },
-        {
-          'id': 'sg_emergency',
-          'name': 'Dana Darurat',
-          'target_amount': 10000000.0,
-          'saved_amount': 2000000.0,
-          'deadline': null,
-          'icon': 'shield',
-          'color': '#D6F0FF',
-          'created_at': now,
-        },
-      ];
-
-      for (final goal in savingsGoals) {
-        await txn.insert('savings_goals', goal);
       }
     });
   }
@@ -312,52 +224,6 @@ class AppDatabase {
   Future<void> _onUpgrade(Database db, int oldVersion, int newVersion) async {
     if (oldVersion < 2) {
       await _createSavingsGoalsTable(db);
-
-      // Seed default goals hanya jika tabel masih kosong (upgrade dari v1)
-      final countResult =
-          await db.rawQuery('SELECT COUNT(*) AS c FROM savings_goals');
-      final existing = (countResult.first['c'] as num?)?.toInt() ?? 0;
-      if (existing == 0) {
-        final now = DateTime.now().toIso8601String();
-        final savingsGoals = [
-          {
-            'id': 'sg_japan',
-            'name': 'Liburan ke Jepang',
-            'target_amount': 15000000.0,
-            'saved_amount': 8000000.0,
-            'deadline': null,
-            'icon': 'flight_takeoff',
-            'color': '#D6F0FF',
-            'wallet_id': 'w_bca',
-            'created_at': now,
-          },
-          {
-            'id': 'sg_laptop',
-            'name': 'Beli Laptop',
-            'target_amount': 12000000.0,
-            'saved_amount': 2500000.0,
-            'deadline': null,
-            'icon': 'laptop_mac',
-            'color': '#D6F0FF',
-            'wallet_id': 'w_mandiri',
-            'created_at': now,
-          },
-          {
-            'id': 'sg_emergency',
-            'name': 'Dana Darurat',
-            'target_amount': 10000000.0,
-            'saved_amount': 2000000.0,
-            'deadline': null,
-            'icon': 'shield',
-            'color': '#D6F0FF',
-            'wallet_id': 'w_cash',
-            'created_at': now,
-          },
-        ];
-        for (final goal in savingsGoals) {
-          await db.insert('savings_goals', goal);
-        }
-      }
     }
 
     if (oldVersion < 3) {
