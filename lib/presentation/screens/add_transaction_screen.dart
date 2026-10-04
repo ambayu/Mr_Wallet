@@ -12,6 +12,7 @@ import '../providers/transaction_provider.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/dialogs/add_category_dialog.dart';
 import '../widgets/dialogs/ai_text_modal.dart';
+import '../widgets/dialogs/balance_adjustment_dialog.dart';
 import '../widgets/dialogs/camera_bill_snap_modal.dart';
 import '../widgets/neo_button.dart';
 import '../widgets/neo_text_field.dart';
@@ -128,30 +129,64 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
               ),
             ),
             const Spacer(),
-            // Tombol Scan Struk di pojok kanan
-            GestureDetector(
-              onTap: () => CameraBillSnapModal.show(context),
-              child: Container(
-                width: 36,
-                height: 36,
-                decoration: BoxDecoration(
-                  color: AppColors.cardWhite,
-                  shape: BoxShape.circle,
-                  border: Border.all(color: AppColors.borderBlack, width: 1.8),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: AppColors.shadowBlack,
-                      offset: Offset(1.5, 1.5),
-                      blurRadius: 0,
+            // Tombol Rekonsiliasi Saldo & Scan Struk di pojok kanan
+            Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                GestureDetector(
+                  onTap: () => BalanceAdjustmentDialog.show(
+                    context,
+                    initialWalletId: widget.initialWalletId,
+                    initialMonthDate: widget.initialDate,
+                  ),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardWhite,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.shadowBlack,
+                          offset: Offset(1.5, 1.5),
+                          blurRadius: 0,
+                        ),
+                      ],
                     ),
-                  ],
+                    child: const Icon(
+                      Icons.tune_rounded,
+                      size: 18,
+                      color: AppColors.textBlack,
+                    ),
+                  ),
                 ),
-                child: const Icon(
-                  Icons.receipt_long_rounded,
-                  size: 18,
-                  color: AppColors.textBlack,
+                const SizedBox(width: 8),
+                GestureDetector(
+                  onTap: () => CameraBillSnapModal.show(context),
+                  child: Container(
+                    width: 36,
+                    height: 36,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardWhite,
+                      shape: BoxShape.circle,
+                      border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.shadowBlack,
+                          offset: Offset(1.5, 1.5),
+                          blurRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: const Icon(
+                      Icons.receipt_long_rounded,
+                      size: 18,
+                      color: AppColors.textBlack,
+                    ),
+                  ),
                 ),
-              ),
+              ],
             ),
           ],
         ),

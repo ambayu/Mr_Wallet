@@ -142,11 +142,77 @@ class AIService {
     }
   }
 
-  // 1. Process Voice / Text Natural Input via Custom Route9 API / Gemini Proxy
+  // 0. Transcribe Audio File to Text via Gemini / Custom AI
+  Future<String> transcribeAudioFile(String audioFilePath) async {
+    try {
+      final file = File(audioFilePath);
+      if (!await file.exists()) return '';
+
+      final bytes = await file.readAsBytes();
+      final base64Audio = base64Encode(bytes);
+
+      final apiKey = await getApiKey();
+      final baseUrl = await getBaseUrl();
+      final modelName = await getModel();
+
+      if (apiKey.isNotEmpty) {
+        final endpointUri = Uri.parse('$baseUrl/chat/completions');
+        final response = await http.post(
+          endpointUri,
+          headers: {
+            'Authorization': 'Bearer $apiKey',
+            'Content-Type': 'application/json',
+            'Accept': 'application/json',
+          },
+          body: jsonEncode({
+            'model': modelName,
+            'messages': [
+              {
+                'role': 'system',
+                'content': 'Anda adalah transkriber audio finansial Indonesia. Tugas Anda mendengarkan rekaman suara pengguna dan menuliskan ulang persis apa yang diucapkan dalam Bahasa Indonesia secara akurat, singkat, tanpa komentar tambahan.'
+              },
+              {
+                'role': 'user',
+                'content': [
+                  {
+                    'type': 'text',
+                    'text': 'Tolong transkripsikan isi audio rekaman berikut ke dalam teks ucapan Bahasa Indonesia:',
+                  },
+                  {
+                    'type': 'image_url', // Format standard multi-modal OpenAI/Gemini proxy
+                    'image_url': {
+                      'url': 'data:audio/mp4;base64,$base64Audio',
+                    },
+                  }
+                ]
+              }
+            ],
+            'temperature': 0.1,
+          }),
+        );
+
+        if (response.statusCode == 200) {
+          final resJson = jsonDecode(response.body) as Map<String, dynamic>;
+          final choices = resJson['choices'] as List<dynamic>?;
+          if (choices != null && choices.isNotEmpty) {
+            final message = choices.first['message'] as Map<String, dynamic>?;
+            final content = message?['content'] as String?;
+            if (content != null && content.trim().isNotEmpty) {
+              return content.trim();
+            }
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Audio transcription error: $e');
+    }
+    return '';
+  }
   Future<AIParsedResult> parseNaturalCommand({
     required String userInput,
     List<String> availableWallets = const ['Dompet Tunai', 'ATM BCA', 'ATM Mandiri', 'GoPay / E-Wallet'],
     List<String> availableCategories = const ['Makan', 'Minum', 'Belanja', 'Bensin', 'Listrik', 'Pulsa', 'Gaji', 'Transfer'],
+    String? financialContext,
   }) async {
     final trimmed = userInput.trim();
     if (trimmed.isEmpty) {
@@ -173,24 +239,37 @@ class AIService {
     if (apiKey.isNotEmpty) {
       try {
         final systemPrompt = '''
-Anda adalah Mr. Wallet, maskot kepiting cerdas dan pecinta uang (seperti Tuan Krabs yang bijak & protektif terhadap tabungan) di aplikasi Mr. Wallet (SmartFlow). Anda gemar melihat uang bertambah (cuan/pemasukan), protektif terhadap uang keluar (mengomel lucu atau mengingatkan jika boros), dan senang menghitung koin/saldo. Analisis pesan pengguna dalam Bahasa Indonesia dan kembalikan respon dalam format JSON strictly valid tanpa markdown tambahan.
+Anda adalah Mr. Wallet, maskot kepiting cerdas dan pecinta uang (seperti Tuan Krabs yang bijak & protektif terhadap tabungan) di aplikasi Mr. Wallet (SmartFlow). Anda gemar melihat uang bertambah (cuan/pemasukan), protektif terhadap uang keluar (mengomel lucu atau mengingatkan jika boros), dan senang menghitung koin/saldo. Analisis pesan pengguna dalam Bahasa Indonesia dan kembalikan respon dalam format JSON strictly valid tanpa markdown code block pada JSON pembungkus.
 
 Daftar Akun Dompet Tersedia: ${availableWallets.join(', ')}
 Daftar Kategori Tersedia: ${availableCategories.join(', ')}
 Waktu Sekarang: ${DateTime.now().toIso8601String()}
+${financialContext != null ? 'Data Realtime Pengguna: $financialContext' : ''}
 
 Aturan Persona & Ekstraksi:
-1. Jika pengguna menyapa, bercanda, bertanya siapa namamu, atau mengobrol santai:
+1. Jika pengguna meminta rincian / tabel pengeluaran atau pemasukan atau ringkasan data keuangan (misal: "apa saja pengeluaran saya", "buatkan tabel pengeluaran", "detail pengeluaran bulan ini"):
+   - "intent": "SUMMARY_QUERY" atau "CHAT"
+   - Kosongkan "transactions" dan "tasks" (array kosong []).
+   - "natural_response":
+     * JIKA pengguna meminta RINCIAN/DETAIL pengeluaran (contoh: "apa saja pengeluaran saya"): buatkan tabel Markdown yang memuat SETIAP ITEM pengeluaran dari data 'Rincian Pengeluaran' yang tersedia:
+       | Pengeluaran / Kategori | Dompet | Nominal |
+       |---|---|---|
+       | ☕ Kopi Susu & Sarapan | Dompet Tunai | Rp 25.000 |
+       | 🛍️ Belanja Bulanan Supermarket | ATM BCA | Rp 150.000 |
+       | **Total Pengeluaran** | - | **Rp 175.000** |
+     * JIKA pengguna meminta ringkasan total saldo umum: buatkan tabel ringkasan (Total Pemasukan, Total Pengeluaran, Total Saldo Tersisa).
+     * Selalu sertakan respon ramah & kocak ala Mr. Wallet yang mengomentari pengeluaran tersebut!
+2. Jika pengguna menyapa, bercanda, bertanya siapa namamu, atau mengobrol santai:
    - "intent": "CHAT"
    - Kosongkan "transactions" dan "tasks" (array kosong []).
    - "natural_response": Jawab dengan karakter Mr. Wallet si kepiting pecinta uang yang asyik, ramah, dan tanyakan apakah ada uang masuk atau transaksi yang mau dicatat.
-2. Jika pengguna mencatat transaksi keuangan:
+3. Jika pengguna mencatat transaksi keuangan:
    - "intent": "TRANSACTION_ENTRY" atau "BALANCE_ADJUSTMENT" atau "MULTI_ACTION"
    - Cocokkan dompet terdekat (default: "${availableWallets.isNotEmpty ? availableWallets.first : 'Dompet Tunai'}").
    - Cocokkan kategori terdekat (misal: "kopi/makan" -> "Makanan & Kopi", "bensin" -> "Transportasi", "gaji" -> "Gaji & Pendapatan").
    - Deteksi tipe: "EXPENSE", "INCOME", "TRANSFER", atau "ADJUSTMENT".
    - "natural_response": Pesan konfirmasi khas Mr. Wallet (gembira saat pemasukan/cuan masuk, teliti & siaga saat pengeluaran).
-3. Jika pengguna menyebutkan jadwal/pengingat/rutinitas (misal: "jadwal gaji tiap bulan", "ingatkan bayar tagihan", "tambahkan task pemasukan gaji 6juta tiap bulan"):
+4. Jika pengguna menyebutkan jadwal/pengingat/rutinitas (misal: "jadwal gaji tiap bulan", "ingatkan bayar tagihan", "tambahkan task pemasukan gaji 6juta tiap bulan"):
    - "intent": "TASK_ENTRY" atau "MULTI_ACTION"
    - Jangan masukkan ke array "transactions" jika ini adalah rencana/jadwal masa depan atau rutinitas, masukkan ke array "tasks".
    - "type": "EXPENSE" (untuk pengeluaran/tagihan) atau "INCOME" (untuk gaji/pemasukan berkala).

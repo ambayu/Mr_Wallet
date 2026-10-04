@@ -1,11 +1,12 @@
+import 'dart:async';
 import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
-
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/ai_service.dart';
+import '../../../core/services/audio_service.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/ai_parsed_result.dart';
 import '../../../data/models/category_model.dart';
@@ -78,6 +79,9 @@ class _AITextModalState extends State<AITextModal> {
 
   final List<_ChatMessage> _messages = [];
   bool _isLoading = false;
+  bool _isRecordingVoice = false;
+  int _recordingDuration = 0;
+  Timer? _recordingTimer;
   String? _committingMessageId;
   final Map<String, String> _selectedWalletOverrides = {}; // key: messageId_txIndex, value: walletId
 
@@ -115,10 +119,63 @@ class _AITextModalState extends State<AITextModal> {
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
     _textController.dispose();
     _focusNode.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  Future<void> _toggleVoiceRecording() async {
+    if (_isRecordingVoice) {
+      // Stop Recording & Send
+      _recordingTimer?.cancel();
+      setState(() {
+        _isRecordingVoice = false;
+        _isLoading = true;
+      });
+
+      final audioPath = await AudioService.instance.stopRecording();
+      if (audioPath != null && audioPath.isNotEmpty) {
+        final transcribed = await AIService.instance.transcribeAudioFile(audioPath);
+        final finalText = transcribed.isNotEmpty
+            ? transcribed
+            : 'Catat pengeluaran atau pemasukan terbaru';
+
+        if (mounted) {
+          setState(() => _isLoading = false);
+          await _handleSend(finalText);
+        }
+      } else {
+        if (mounted) {
+          setState(() => _isLoading = false);
+        }
+      }
+    } else {
+      // Start Recording
+      final path = await AudioService.instance.startRecording();
+      if (path != null) {
+        setState(() {
+          _isRecordingVoice = true;
+          _recordingDuration = 0;
+        });
+
+        _recordingTimer?.cancel();
+        _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+          if (mounted) {
+            setState(() {
+              _recordingDuration++;
+            });
+          }
+        });
+      } else {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Izin mikrofon tidak diberikan atau perangkat tidak mendukung.')),
+          );
+        }
+      }
+    }
   }
 
   void _scrollToBottom() {
@@ -160,10 +217,45 @@ class _AITextModalState extends State<AITextModal> {
     final categoryNames = txProv.categories.map((c) => c.name).toList();
 
     try {
+      // Siapkan context finansial aktual (Pemasukan, Pengeluaran, Saldo, dan Rincian Transaksi) untuk AI
+      double currentMonthIncome = 0;
+      double currentMonthExpense = 0;
+      final now = DateTime.now();
+      final List<String> expenseDetails = [];
+      final List<String> incomeDetails = [];
+
+      for (var tx in txProv.transactions) {
+        if (tx.date.year == now.year && tx.date.month == now.month) {
+          final dateStr = DateFormat('d MMM', 'id_ID').format(tx.date);
+          final catName = tx.categoryName ?? (tx.type == 'INCOME' ? 'Pemasukan' : 'Pengeluaran');
+          final desc = tx.description.isNotEmpty ? tx.description : catName;
+          final amountStr = CurrencyFormatter.formatRupiah(tx.amount);
+          final wallet = tx.walletName ?? 'Dompet';
+
+          if (tx.type == 'INCOME') {
+            currentMonthIncome += tx.amount;
+            incomeDetails.add('[$dateStr] $desc ($catName, $wallet): +$amountStr');
+          } else if (tx.type == 'EXPENSE') {
+            currentMonthExpense += tx.amount;
+            expenseDetails.add('[$dateStr] $desc ($catName, $wallet): -$amountStr');
+          }
+        }
+      }
+
+      final financialContext = 'Data Finansial Bulan Ini (${DateFormat('MMMM yyyy', 'id_ID').format(now)}):\n'
+          '- Total Pemasukan: ${CurrencyFormatter.formatRupiah(currentMonthIncome)}\n'
+          '- Total Pengeluaran: ${CurrencyFormatter.formatRupiah(currentMonthExpense)}\n'
+          '- Total Saldo Tersisa: ${CurrencyFormatter.formatRupiah(walletProv.totalBalance)}\n'
+          '- Rincian Pengeluaran (${expenseDetails.length} transaksi):\n'
+          '  ${expenseDetails.isEmpty ? "Belum ada pengeluaran" : expenseDetails.join("\n  ")}\n'
+          '- Rincian Pemasukan (${incomeDetails.length} transaksi):\n'
+          '  ${incomeDetails.isEmpty ? "Belum ada pemasukan" : incomeDetails.join("\n  ")}';
+
       final result = await AIService.instance.parseNaturalCommand(
         userInput: clean,
         availableWallets: walletNames,
         availableCategories: categoryNames,
+        financialContext: financialContext,
       );
 
       final aiMsgId = 'ai_${DateTime.now().millisecondsSinceEpoch}';
@@ -726,42 +818,102 @@ class _AITextModalState extends State<AITextModal> {
                     ),
                     const SizedBox(width: 8),
 
-                    // Input Text Area
+                    // Input Text Area / Voice Recording Indicator
                     Expanded(
-                      child: Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFF4F4F5),
-                          borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: AppColors.borderBlack, width: 1.6),
-                        ),
-                        child: TextField(
-                          controller: _textController,
-                          focusNode: _focusNode,
-                          textInputAction: TextInputAction.send,
-                          onSubmitted: (v) => _handleSend(),
-                          style: const TextStyle(
-                            fontSize: 13.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textBlack,
-                          ),
-                          decoration: const InputDecoration(
-                            isDense: true,
-                            hintText: 'Ketik transaksi atau foto struk...',
-                            hintStyle: TextStyle(
-                              fontSize: 12,
-                              color: AppColors.textMuted,
-                              fontWeight: FontWeight.w500,
+                      child: _isRecordingVoice
+                          ? Container(
+                              height: 42,
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFFFE4E6),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: AppColors.dangerRed, width: 1.8),
+                              ),
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.fiber_manual_record_rounded, size: 14, color: AppColors.dangerRed),
+                                  const SizedBox(width: 8),
+                                  Text(
+                                    'Merekam... 00:${_recordingDuration.toString().padLeft(2, '0')}',
+                                    style: const TextStyle(
+                                      fontSize: 13,
+                                      fontWeight: FontWeight.w900,
+                                      color: AppColors.dangerRed,
+                                    ),
+                                  ),
+                                  const Spacer(),
+                                  const Text(
+                                    'Bicara sekarang',
+                                    style: TextStyle(
+                                      fontSize: 11,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            )
+                          : Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 14),
+                              decoration: BoxDecoration(
+                                color: const Color(0xFFF4F4F5),
+                                borderRadius: BorderRadius.circular(24),
+                                border: Border.all(color: AppColors.borderBlack, width: 1.6),
+                              ),
+                              child: TextField(
+                                controller: _textController,
+                                focusNode: _focusNode,
+                                textInputAction: TextInputAction.send,
+                                onSubmitted: (v) => _handleSend(),
+                                style: const TextStyle(
+                                  fontSize: 13.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textBlack,
+                                ),
+                                decoration: const InputDecoration(
+                                  isDense: true,
+                                  hintText: 'Ketik transaksi, instruksi, atau rekam suara...',
+                                  hintStyle: TextStyle(
+                                    fontSize: 12,
+                                    color: AppColors.textMuted,
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                  border: InputBorder.none,
+                                  contentPadding: EdgeInsets.symmetric(vertical: 10),
+                                ),
+                              ),
                             ),
-                            border: InputBorder.none,
-                            contentPadding: EdgeInsets.symmetric(vertical: 10),
-                          ),
+                    ),
+                    const SizedBox(width: 6),
+
+                    // Tombol Mic Voice
+                    GestureDetector(
+                      onTap: _toggleVoiceRecording,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: _isRecordingVoice ? AppColors.dangerRed : const Color(0xFFDCFCE7),
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.shadowBlack,
+                              offset: Offset(1.5, 1.5),
+                              blurRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: Icon(
+                          _isRecordingVoice ? Icons.stop_rounded : Icons.mic_rounded,
+                          size: 20,
+                          color: _isRecordingVoice ? Colors.white : const Color(0xFF16A34A),
                         ),
                       ),
                     ),
-                    const SizedBox(width: 8),
+                    const SizedBox(width: 6),
 
-                    // Tombol Kirim
+                    // Tombol Kirim Teks
                     GestureDetector(
                       onTap: () => _handleSend(),
                       child: Container(
@@ -922,28 +1074,21 @@ class _AITextModalState extends State<AITextModal> {
                       ),
                     ],
                   ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        msg.text,
-                        style: const TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w700,
-                          color: AppColors.textBlack,
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        _buildFormattedMessageText(msg.text),
+                        const SizedBox(height: 4),
+                        Text(
+                          DateFormat('HH:mm').format(msg.timestamp),
+                          style: const TextStyle(
+                            fontSize: 9.5,
+                            fontWeight: FontWeight.w600,
+                            color: AppColors.textMuted,
+                          ),
                         ),
-                      ),
-                      const SizedBox(height: 3),
-                      Text(
-                        DateFormat('HH:mm').format(msg.timestamp),
-                        style: const TextStyle(
-                          fontSize: 9.5,
-                          fontWeight: FontWeight.w600,
-                          color: AppColors.textMuted,
-                        ),
-                      ),
-                    ],
-                  ),
+                      ],
+                    ),
                 ),
 
                 // Jika AI menghasilkan tindakan transaksi/task
@@ -1191,6 +1336,142 @@ class _AITextModalState extends State<AITextModal> {
             ),
           ),
         ],
+      ),
+    );
+  }
+
+  Widget _buildFormattedMessageText(String raw) {
+    // Jika tidak mengandung karakter tabel markdown '|', render teks biasa
+    if (!raw.contains('|')) {
+      return Text(
+        raw,
+        style: const TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.w700,
+          color: AppColors.textBlack,
+        ),
+      );
+    }
+
+    final lines = raw.split('\n');
+    final List<Widget> widgets = [];
+    final List<String> tableLines = [];
+    bool inTable = false;
+
+    for (var line in lines) {
+      final trimmed = line.trim();
+      final isTableLine = trimmed.startsWith('|') && trimmed.endsWith('|');
+
+      if (isTableLine) {
+        inTable = true;
+        tableLines.add(trimmed);
+      } else {
+        if (inTable && tableLines.isNotEmpty) {
+          widgets.add(_renderMarkdownTable(tableLines));
+          widgets.add(const SizedBox(height: 8));
+          tableLines.clear();
+          inTable = false;
+        }
+
+        if (trimmed.isNotEmpty) {
+          widgets.add(
+            Padding(
+              padding: const EdgeInsets.only(bottom: 6),
+              child: Text(
+                line,
+                style: const TextStyle(
+                  fontSize: 13,
+                  fontWeight: FontWeight.w700,
+                  color: AppColors.textBlack,
+                ),
+              ),
+            ),
+          );
+        }
+      }
+    }
+
+    if (tableLines.isNotEmpty) {
+      widgets.add(_renderMarkdownTable(tableLines));
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: widgets,
+    );
+  }
+
+  Widget _renderMarkdownTable(List<String> rawRows) {
+    // Filter baris separator markdown seperti |:---|:---| atau |---|---|
+    final validRows = rawRows.where((r) {
+      final inside = r.replaceAll('|', '').replaceAll('-', '').replaceAll(':', '').trim();
+      return inside.isNotEmpty;
+    }).toList();
+
+    if (validRows.isEmpty) return const SizedBox.shrink();
+
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.cardWhite,
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: AppColors.borderBlack, width: 1.5),
+        boxShadow: const [
+          BoxShadow(
+            color: AppColors.shadowBlack,
+            offset: Offset(1.5, 2),
+            blurRadius: 0,
+          ),
+        ],
+      ),
+      child: ClipRRect(
+        borderRadius: BorderRadius.circular(10),
+        child: Table(
+          border: TableBorder.symmetric(
+            inside: const BorderSide(color: Color(0xFFE4E4E7), width: 1.0),
+          ),
+          columnWidths: validRows.isNotEmpty &&
+                  validRows.first.split('|').where((c) => c.isNotEmpty).length > 2
+              ? const {
+                  0: FlexColumnWidth(1.4),
+                  1: FlexColumnWidth(1.0),
+                  2: FlexColumnWidth(1.0),
+                }
+              : const {
+                  0: FlexColumnWidth(1.2),
+                  1: FlexColumnWidth(1.0),
+                },
+          children: validRows.asMap().entries.map((entry) {
+            final idx = entry.key;
+            final rowStr = entry.value;
+            final isHeader = idx == 0;
+
+            final cells = rowStr
+                .split('|')
+                .where((c) => c.isNotEmpty)
+                .map((c) => c.trim())
+                .toList();
+
+            return TableRow(
+              decoration: BoxDecoration(
+                color: isHeader ? const Color(0xFFFEF08A) : Colors.transparent,
+              ),
+              children: cells.map((cell) {
+                return Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+                  child: Text(
+                    cell,
+                    style: TextStyle(
+                      fontSize: 11.5,
+                      fontWeight: isHeader ? FontWeight.w900 : FontWeight.w700,
+                      color: AppColors.textBlack,
+                    ),
+                  ),
+                );
+              }).toList(),
+            );
+          }).toList(),
+        ),
       ),
     );
   }

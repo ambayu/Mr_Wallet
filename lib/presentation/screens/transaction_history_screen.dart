@@ -11,7 +11,6 @@ import '../../data/models/transaction_model.dart';
 import '../../data/models/wallet_model.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/wallet_provider.dart';
-import '../widgets/dialogs/balance_adjustment_dialog.dart';
 import '../widgets/dialogs/header_wallet_picker_dialog.dart';
 import '../widgets/dialogs/wallet_list_modal.dart';
 import '../widgets/neo_button.dart';
@@ -546,47 +545,6 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   _buildFilterPill('Pemasukan'),
                   const SizedBox(width: 6),
                   _buildFilterPill('Pengeluaran'),
-                  const Spacer(),
-                  // Tombol Rekonsiliasi Saldo (Deteksi Uang Hilang / Selisih Saldo)
-                  GestureDetector(
-                    onTap: () => BalanceAdjustmentDialog.show(
-                      context,
-                      initialWalletId: _selectedWalletId != 'ALL' ? _selectedWalletId : null,
-                      initialMonthDate: _selectedMonth,
-                    ),
-                    child: Container(
-                      height: 32,
-                      padding: const EdgeInsets.symmetric(horizontal: 8),
-                      alignment: Alignment.center,
-                      decoration: BoxDecoration(
-                        color: AppColors.butterYellow,
-                        borderRadius: BorderRadius.circular(10),
-                        border: Border.all(color: AppColors.borderBlack, width: 1.6),
-                        boxShadow: const [
-                          BoxShadow(
-                            color: AppColors.shadowBlack,
-                            offset: Offset(1.5, 1.5),
-                            blurRadius: 0,
-                          ),
-                        ],
-                      ),
-                      child: const Row(
-                        mainAxisSize: MainAxisSize.min,
-                        children: [
-                          Icon(Icons.tune_rounded, size: 14, color: AppColors.textBlack),
-                          SizedBox(width: 4),
-                          Text(
-                            'Rekonsiliasi',
-                            style: TextStyle(
-                              fontSize: 10.5,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textBlack,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                  ),
                 ],
               ),
             ),
