@@ -6,13 +6,17 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/currency_formatter.dart';
+import '../../core/utils/wallet_icon_helper.dart';
 import '../../data/models/transaction_model.dart';
 import '../../data/models/wallet_model.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../widgets/dialogs/balance_adjustment_dialog.dart';
 import '../widgets/dialogs/header_wallet_picker_dialog.dart';
 import '../widgets/dialogs/wallet_list_modal.dart';
+import '../widgets/neo_button.dart';
 import '../widgets/neo_card.dart';
+import '../widgets/neo_text_field.dart';
 import 'add_transaction_screen.dart';
 import 'wallet_detail_screen.dart';
 
@@ -497,10 +501,12 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               children: [
                   // Sisa Saldo Badge
                   Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 6),
+                    height: 32,
+                    padding: const EdgeInsets.symmetric(horizontal: 10),
+                    alignment: Alignment.center,
                     decoration: BoxDecoration(
                       color: AppColors.cardWhite,
-                      borderRadius: BorderRadius.circular(12),
+                      borderRadius: BorderRadius.circular(10),
                       border: Border.all(color: AppColors.borderBlack, width: 1.6),
                       boxShadow: const [
                         BoxShadow(
@@ -536,32 +542,26 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
 
                   // Filter Pills: [Semua] [Masuk] [Keluar]
                   _buildFilterPill('Semua'),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   _buildFilterPill('Pemasukan'),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 6),
                   _buildFilterPill('Pengeluaran'),
                   const Spacer(),
-
-                  // Tombol + Catat
+                  // Tombol Rekonsiliasi Saldo (Deteksi Uang Hilang / Selisih Saldo)
                   GestureDetector(
-                    onTap: () => Navigator.push(
+                    onTap: () => BalanceAdjustmentDialog.show(
                       context,
-                      MaterialPageRoute(
-                        builder: (_) => AddTransactionScreen(
-                          initialDate: DateTime(
-                            _selectedMonth.year,
-                            _selectedMonth.month,
-                            DateTime.now().month == _selectedMonth.month ? DateTime.now().day : 1,
-                          ),
-                        ),
-                      ),
+                      initialWalletId: _selectedWalletId != 'ALL' ? _selectedWalletId : null,
+                      initialMonthDate: _selectedMonth,
                     ),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                      height: 32,
+                      padding: const EdgeInsets.symmetric(horizontal: 8),
+                      alignment: Alignment.center,
                       decoration: BoxDecoration(
-                        color: AppColors.primaryYellow,
-                        borderRadius: BorderRadius.circular(12),
-                        border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                        color: AppColors.butterYellow,
+                        borderRadius: BorderRadius.circular(10),
+                        border: Border.all(color: AppColors.borderBlack, width: 1.6),
                         boxShadow: const [
                           BoxShadow(
                             color: AppColors.shadowBlack,
@@ -573,12 +573,12 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                       child: const Row(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.add_rounded, size: 15, color: AppColors.textBlack),
-                          SizedBox(width: 3),
+                          Icon(Icons.tune_rounded, size: 14, color: AppColors.textBlack),
+                          SizedBox(width: 4),
                           Text(
-                            'Catat',
+                            'Rekonsiliasi',
                             style: TextStyle(
-                              fontSize: 11.5,
+                              fontSize: 10.5,
                               fontWeight: FontWeight.w900,
                               color: AppColors.textBlack,
                             ),
@@ -596,7 +596,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: 14),
               child: Container(
-                height: 38,
+                height: 42,
                 decoration: BoxDecoration(
                   color: AppColors.cardWhite,
                   borderRadius: BorderRadius.circular(14),
@@ -611,6 +611,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                 ),
                 child: TextField(
                   controller: _searchController,
+                  textAlignVertical: TextAlignVertical.center,
                   onChanged: (val) => setState(() => _searchQuery = val),
                   style: const TextStyle(
                     fontSize: 13,
@@ -618,15 +619,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                     color: AppColors.textBlack,
                   ),
                   decoration: const InputDecoration(
+                    isDense: true,
                     hintText: 'Cari catatan transaksi...',
                     hintStyle: TextStyle(
                       color: AppColors.textMuted,
                       fontWeight: FontWeight.w500,
                       fontSize: 12,
                     ),
-                    prefixIcon: Icon(Icons.search_rounded, color: AppColors.textBlack, size: 18),
+                    prefixIcon: Icon(Icons.search_rounded, color: AppColors.textBlack, size: 20),
                     border: InputBorder.none,
-                    contentPadding: EdgeInsets.symmetric(horizontal: 10, vertical: 9),
+                    contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 0),
                   ),
                 ),
               ),
@@ -696,49 +698,108 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                         ],
                       ),
                     )
-                  : ListView.builder(
-                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 2),
-                      itemCount: grouped.keys.length,
-                      itemBuilder: (context, index) {
-                        final dateHeader = grouped.keys.elementAt(index);
-                        final txList = grouped[dateHeader]!;
+                    : ListView.builder(
+                        padding: const EdgeInsets.only(left: 14, right: 14, top: 4, bottom: 84),
+                        itemCount: grouped.keys.length,
+                        itemBuilder: (context, index) {
+                          final dateHeader = grouped.keys.elementAt(index);
+                          final txList = grouped[dateHeader]!;
 
-                        return Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            // Header Tanggal Lebih Jelas, Tegas & Beraksen Neo-Brutalist
-                            Padding(
-                              padding: const EdgeInsets.only(top: 8, bottom: 6),
-                              child: Row(
-                                children: [
-                                  Container(
-                                    width: 7,
-                                    height: 7,
-                                    decoration: const BoxDecoration(
-                                      color: AppColors.textBlack,
-                                      shape: BoxShape.circle,
-                                    ),
+                          return Padding(
+                            padding: EdgeInsets.only(top: index == 0 ? 2 : 14),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                // Header Tanggal Lebih Jelas, Tegas & Beraksen Neo-Brutalist
+                                Padding(
+                                  padding: const EdgeInsets.only(bottom: 8),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 7,
+                                        height: 7,
+                                        decoration: const BoxDecoration(
+                                          color: AppColors.textBlack,
+                                          shape: BoxShape.circle,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Text(
+                                        dateHeader,
+                                        style: const TextStyle(
+                                          fontSize: 12.5,
+                                          fontWeight: FontWeight.w900,
+                                          color: AppColors.textBlack,
+                                          letterSpacing: -0.2,
+                                        ),
+                                      ),
+                                    ],
                                   ),
-                                  const SizedBox(width: 6),
-                                  Text(
-                                    dateHeader,
-                                    style: const TextStyle(
-                                      fontSize: 12.5,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppColors.textBlack,
-                                      letterSpacing: -0.2,
-                                    ),
-                                  ),
-                                ],
-                              ),
+                                ),
+                                ...txList.asMap().entries.map((entry) {
+                                  final idx = entry.key;
+                                  final tx = entry.value;
+                                  return Column(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      _buildTransactionCard(tx),
+                                      if (idx < txList.length - 1)
+                                        Padding(
+                                          padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 8),
+                                          child: Divider(
+                                            color: AppColors.borderBlack.withValues(alpha: 0.2),
+                                            thickness: 1.4,
+                                            height: 1.4,
+                                          ),
+                                        ),
+                                    ],
+                                  );
+                                }),
+                              ],
                             ),
-                            ...txList.map((tx) => _buildTransactionCard(tx)),
-                          ],
-                        );
-                      },
-                    ),
+                          );
+                        },
+                      ),
             ),
           ],
+        ),
+      ),
+      floatingActionButton: Container(
+        decoration: BoxDecoration(
+          borderRadius: BorderRadius.circular(18),
+          boxShadow: const [
+            BoxShadow(
+              color: AppColors.shadowBlack,
+              offset: Offset(2.5, 3.0),
+              blurRadius: 0,
+            ),
+          ],
+        ),
+        child: FloatingActionButton(
+          onPressed: () => Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => AddTransactionScreen(
+                initialDate: DateTime(
+                  _selectedMonth.year,
+                  _selectedMonth.month,
+                  DateTime.now().month == _selectedMonth.month ? DateTime.now().day : 1,
+                ),
+              ),
+            ),
+          ),
+          backgroundColor: AppColors.primaryYellow,
+          elevation: 0,
+          highlightElevation: 0,
+          shape: RoundedRectangleBorder(
+            borderRadius: BorderRadius.circular(18),
+            side: const BorderSide(color: AppColors.borderBlack, width: 2.2),
+          ),
+          child: const Icon(
+            Icons.add_rounded,
+            size: 32,
+            color: AppColors.textBlack,
+          ),
         ),
       ),
     );
@@ -786,7 +847,7 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
       onLongPress: onLongPress,
       child: Container(
         height: double.infinity,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        padding: const EdgeInsets.symmetric(horizontal: 4),
         alignment: Alignment.center,
         color: isSelected ? AppColors.butterYellow : Colors.transparent,
         child: Column(
@@ -799,38 +860,43 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
               children: [
                 if (isSelected) ...[
                   Container(
-                    width: 6,
-                    height: 6,
+                    width: 5,
+                    height: 5,
                     decoration: const BoxDecoration(
                       color: AppColors.textBlack,
                       shape: BoxShape.circle,
                     ),
                   ),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 3),
                 ],
                 Flexible(
-                  child: Text(
-                    name,
-                    maxLines: 1,
-                    overflow: TextOverflow.ellipsis,
-                    textAlign: TextAlign.center,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
-                      color: AppColors.textBlack,
+                  child: FittedBox(
+                    fit: BoxFit.scaleDown,
+                    child: Text(
+                      name,
+                      maxLines: 1,
+                      textAlign: TextAlign.center,
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                        color: AppColors.textBlack,
+                      ),
                     ),
                   ),
                 ),
               ],
             ),
-            Text(
-              CurrencyFormatter.formatShort(bal),
-              maxLines: 1,
-              overflow: TextOverflow.ellipsis,
-              style: const TextStyle(
-                fontSize: 9.5,
-                fontWeight: FontWeight.w800,
-                color: AppColors.textMuted,
+            const SizedBox(height: 1),
+            FittedBox(
+              fit: BoxFit.scaleDown,
+              child: Text(
+                CurrencyFormatter.formatShort(bal),
+                maxLines: 1,
+                style: const TextStyle(
+                  fontSize: 9.5,
+                  fontWeight: FontWeight.w800,
+                  color: AppColors.textMuted,
+                ),
               ),
             ),
           ],
@@ -850,19 +916,19 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
     return GestureDetector(
       onTap: () => setState(() => _selectedTypeFilter = label),
       child: Container(
-        height: 28,
-        padding: const EdgeInsets.symmetric(horizontal: 8),
+        height: 32,
+        padding: const EdgeInsets.symmetric(horizontal: 10),
         alignment: Alignment.center,
         decoration: BoxDecoration(
           color: isSelected ? AppColors.textBlack : AppColors.cardWhite,
           borderRadius: BorderRadius.circular(10),
-          border: Border.all(color: AppColors.borderBlack, width: 1.5),
+          border: Border.all(color: AppColors.borderBlack, width: 1.6),
           boxShadow: isSelected
               ? null
               : const [
                   BoxShadow(
                     color: AppColors.shadowBlack,
-                    offset: Offset(1.2, 1.2),
+                    offset: Offset(1.5, 1.5),
                     blurRadius: 0,
                   ),
                 ],
@@ -870,12 +936,187 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         child: Text(
           shortLabel,
           style: TextStyle(
-            fontSize: 11,
+            fontSize: 11.5,
             fontWeight: FontWeight.w800,
             color: isSelected ? Colors.white : AppColors.textBlack,
           ),
         ),
       ),
+    );
+  }
+
+  void _showTransactionActionsModal(TransactionModel tx) {
+    final isIncome = tx.type == 'INCOME';
+    final isTransfer = tx.type == 'TRANSFER';
+
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.butterYellow,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
+            border: Border(
+              top: BorderSide(color: AppColors.borderBlack, width: 2.5),
+              left: BorderSide(color: AppColors.borderBlack, width: 2.5),
+              right: BorderSide(color: AppColors.borderBlack, width: 2.5),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                // Handle bar
+                Center(
+                  child: Container(
+                    width: 44,
+                    height: 5,
+                    decoration: BoxDecoration(
+                      color: AppColors.borderBlack.withValues(alpha: 0.3),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 14),
+
+                // Info singkat transaksi
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(12),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardWhite,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        width: 38,
+                        height: 38,
+                        decoration: BoxDecoration(
+                          color: _getCategoryColor(tx.categoryName, tx.type),
+                          borderRadius: BorderRadius.circular(10),
+                          border: Border.all(color: AppColors.borderBlack, width: 1.4),
+                        ),
+                        child: Icon(
+                          _getCategoryIcon(tx.categoryName, tx.type),
+                          size: 20,
+                          color: AppColors.textBlack,
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              tx.description.isNotEmpty
+                                  ? tx.description
+                                  : (tx.categoryName ?? 'Transaksi'),
+                              style: const TextStyle(
+                                fontSize: 13.5,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textBlack,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                            Text(
+                              '${DateFormat('d MMMM yyyy, HH:mm', 'id_ID').format(tx.date)} • ${tx.walletName ?? 'Dompet'}',
+                              style: const TextStyle(
+                                fontSize: 10.5,
+                                fontWeight: FontWeight.w600,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 6),
+                      Text(
+                        '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(tx.amount)}',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w900,
+                          color: isIncome
+                              ? const Color(0xFF16A34A)
+                              : isTransfer
+                                  ? AppColors.textBlack
+                                  : const Color(0xFFDC2626),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Tombol Edit Transaksi
+                NeoButton(
+                  label: 'Edit Transaksi',
+                  icon: Icons.edit_rounded,
+                  backgroundColor: AppColors.primaryYellow,
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    _openEditTransactionModal(tx);
+                  },
+                ),
+                const SizedBox(height: 10),
+
+                // Tombol Hapus Transaksi
+                NeoButton(
+                  label: 'Hapus Transaksi',
+                  icon: Icons.delete_outline_rounded,
+                  backgroundColor: const Color(0xFFFCA5A5),
+                  onPressed: () async {
+                    Navigator.pop(ctx);
+                    final confirm = await showDialog<bool>(
+                      context: context,
+                      builder: (dialogCtx) => AlertDialog(
+                        title: const Text('Hapus Transaksi?'),
+                        content: const Text(
+                            'Tindakan ini akan mengembalikan saldo dompet seperti semula.'),
+                        actions: [
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogCtx, false),
+                            child: const Text('Batal'),
+                          ),
+                          TextButton(
+                            onPressed: () => Navigator.pop(dialogCtx, true),
+                            child: const Text('Hapus',
+                                style: TextStyle(color: Colors.red)),
+                          ),
+                        ],
+                      ),
+                    );
+
+                    if (confirm == true && mounted) {
+                      await Provider.of<TransactionProvider>(context, listen: false)
+                          .deleteTransaction(tx);
+                      if (mounted) {
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          const SnackBar(content: Text('Transaksi berhasil dihapus')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  void _openEditTransactionModal(TransactionModel tx) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => _EditTransactionSheet(transaction: tx),
     );
   }
 
@@ -926,13 +1167,16 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
         );
       },
       child: Padding(
-        padding: const EdgeInsets.only(bottom: 7),
-        child: NeoCard(
-          backgroundColor: AppColors.cardWhite,
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-          borderRadius: 16,
-          borderWidth: 1.8,
-          child: Row(
+        padding: const EdgeInsets.only(bottom: 2),
+        child: InkWell(
+          borderRadius: BorderRadius.circular(16),
+          onTap: () => _showTransactionActionsModal(tx),
+          child: NeoCard(
+            backgroundColor: AppColors.cardWhite,
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+            borderRadius: 16,
+            borderWidth: 1.8,
+            child: Row(
             children: [
               // Category Icon Container
               Container(
@@ -988,21 +1232,25 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                           ),
                         ),
                         const SizedBox(width: 6),
-                        Container(
-                          padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
-                          decoration: BoxDecoration(
-                            color: AppColors.pillGray,
-                            borderRadius: BorderRadius.circular(6),
-                            border: Border.all(color: AppColors.borderBlack, width: 0.8),
-                          ),
-                          child: Text(
-                            isTransfer
-                                ? '${tx.walletName ?? 'Dompet'} ➔ ${tx.toWalletName ?? 'Akun'}'
-                                : tx.walletName ?? 'Dompet',
-                            style: const TextStyle(
-                              fontSize: 9.5,
-                              fontWeight: FontWeight.w700,
-                              color: AppColors.textBlack,
+                        Flexible(
+                          child: Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 1),
+                            decoration: BoxDecoration(
+                              color: AppColors.pillGray,
+                              borderRadius: BorderRadius.circular(6),
+                              border: Border.all(color: AppColors.borderBlack, width: 0.8),
+                            ),
+                            child: Text(
+                              isTransfer
+                                  ? '${tx.walletName ?? 'Dompet'} ➔ ${tx.toWalletName ?? 'Akun'}'
+                                  : tx.walletName ?? 'Dompet',
+                              style: const TextStyle(
+                                fontSize: 9.5,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textBlack,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ),
@@ -1011,38 +1259,453 @@ class _TransactionHistoryScreenState extends State<TransactionHistoryScreen> {
                   ],
                 ),
               ),
+              const SizedBox(width: 8),
 
               // Amount Nominal
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.end,
-                children: [
-                  Text(
-                    '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(tx.amount)}',
-                    style: TextStyle(
-                      fontSize: 13.5,
-                      fontWeight: FontWeight.w900,
-                      color: isIncome
-                          ? const Color(0xFF16A34A)
-                          : isTransfer
-                              ? AppColors.textBlack
-                              : const Color(0xFFDC2626),
-                    ),
-                  ),
-                  if (tx.subType == 'LOST_MONEY') ...[
-                    const SizedBox(height: 2),
-                    const Text(
-                      'Uang Hilang',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w800,
-                        color: AppColors.dangerRed,
+              ConstrainedBox(
+                constraints: BoxConstraints(
+                  maxWidth: MediaQuery.of(context).size.width * 0.45,
+                ),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
+                  children: [
+                    FittedBox(
+                      fit: BoxFit.scaleDown,
+                      alignment: Alignment.centerRight,
+                      child: Text(
+                        '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(tx.amount)}',
+                        style: TextStyle(
+                          fontSize: 13.5,
+                          fontWeight: FontWeight.w900,
+                          color: isIncome
+                              ? const Color(0xFF16A34A)
+                              : isTransfer
+                                  ? AppColors.textBlack
+                                  : const Color(0xFFDC2626),
+                        ),
                       ),
                     ),
+                    if (tx.subType == 'LOST_MONEY') ...[
+                      const SizedBox(height: 2),
+                      const Text(
+                        'Uang Hilang',
+                        style: TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w800,
+                          color: AppColors.dangerRed,
+                        ),
+                      ),
+                    ],
                   ],
-                ],
+                ),
               ),
             ],
           ),
+        ),
+      ),
+    ),
+    );
+  }
+}
+
+/// Bottom sheet untuk mengedit transaksi
+class _EditTransactionSheet extends StatefulWidget {
+  final TransactionModel transaction;
+
+  const _EditTransactionSheet({required this.transaction});
+
+  @override
+  State<_EditTransactionSheet> createState() => _EditTransactionSheetState();
+}
+
+class _EditTransactionSheetState extends State<_EditTransactionSheet> {
+  late String _selectedType;
+  late String? _selectedCategoryId;
+  late String _selectedWalletId;
+  String? _selectedToWalletId;
+  late DateTime _selectedDate;
+
+  final TextEditingController _amountController = TextEditingController();
+  final TextEditingController _descController = TextEditingController();
+  final NumberFormat _currencyFormat = NumberFormat('#,###', 'id_ID');
+  bool _isSaving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    final tx = widget.transaction;
+    _selectedType = tx.type;
+    _selectedCategoryId = tx.categoryId;
+    _selectedWalletId = tx.walletId;
+    _selectedToWalletId = tx.toWalletId;
+    _selectedDate = tx.transactionDate;
+
+    _amountController.text = _currencyFormat.format(tx.amount.toInt());
+    _descController.text = tx.description;
+  }
+
+  @override
+  void dispose() {
+    _amountController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  void _onAmountChanged(String val) {
+    if (val.isEmpty) return;
+    final clean = val.replaceAll(RegExp(r'[^0-9]'), '');
+    if (clean.isEmpty) {
+      _amountController.value = const TextEditingValue(text: '');
+      return;
+    }
+    final number = int.tryParse(clean) ?? 0;
+    final formatted = _currencyFormat.format(number);
+    _amountController.value = TextEditingValue(
+      text: formatted,
+      selection: TextSelection.collapsed(offset: formatted.length),
+    );
+  }
+
+  Future<void> _handleSave() async {
+    final rawAmount = _amountController.text.replaceAll(RegExp(r'[^0-9]'), '');
+    final amount = double.tryParse(rawAmount) ?? 0;
+
+    if (amount <= 0) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Nominal harus lebih dari 0!')),
+      );
+      return;
+    }
+
+    final isTransfer = _selectedType == 'TRANSFER';
+    if (isTransfer &&
+        (_selectedToWalletId == null ||
+            _selectedToWalletId == _selectedWalletId)) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(
+          content: Text('Pilih rekening tujuan transfer yang berbeda!'),
+        ),
+      );
+      return;
+    }
+
+    setState(() => _isSaving = true);
+    final txProv = Provider.of<TransactionProvider>(context, listen: false);
+    final walletProv = Provider.of<WalletProvider>(context, listen: false);
+
+    try {
+      final desc = _descController.text.trim();
+      final updatedTx = widget.transaction.copyWith(
+        walletId: _selectedWalletId,
+        toWalletId: isTransfer ? _selectedToWalletId : null,
+        categoryId: isTransfer ? null : _selectedCategoryId,
+        type: _selectedType,
+        amount: amount,
+        description: desc.isNotEmpty ? desc : (widget.transaction.categoryName ?? 'Transaksi'),
+        transactionDate: _selectedDate,
+      );
+
+      await txProv.updateTransaction(widget.transaction, updatedTx);
+      await walletProv.loadWallets();
+
+      if (mounted) {
+        Navigator.pop(context);
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Transaksi berhasil diperbarui!')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Gagal memperbarui: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSaving = false);
+    }
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _selectedDate,
+      firstDate: DateTime(2020),
+      lastDate: DateTime.now().add(const Duration(days: 365)),
+    );
+    if (picked != null) {
+      setState(() {
+        _selectedDate = DateTime(
+          picked.year,
+          picked.month,
+          picked.day,
+          _selectedDate.hour,
+          _selectedDate.minute,
+        );
+      });
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final walletProv = Provider.of<WalletProvider>(context);
+    final isTransfer = _selectedType == 'TRANSFER';
+
+    return Padding(
+      padding: EdgeInsets.only(
+        bottom: MediaQuery.of(context).viewInsets.bottom,
+      ),
+      child: Container(
+        constraints: BoxConstraints(
+          maxHeight: MediaQuery.of(context).size.height * 0.9,
+        ),
+        decoration: const BoxDecoration(
+          color: AppColors.butterYellow,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
+          border: Border(
+            top: BorderSide(color: AppColors.borderBlack, width: 2.5),
+            left: BorderSide(color: AppColors.borderBlack, width: 2.5),
+            right: BorderSide(color: AppColors.borderBlack, width: 2.5),
+          ),
+        ),
+        child: SafeArea(
+          top: false,
+          child: SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 18),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                // Header
+                Row(
+                  children: [
+                    const Text(
+                      'Edit Transaksi',
+                      style: TextStyle(
+                        fontSize: 18,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textBlack,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: () => Navigator.pop(context),
+                      child: Container(
+                        padding: const EdgeInsets.all(6),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardWhite,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                        ),
+                        child: const Icon(Icons.close_rounded, size: 18, color: AppColors.textBlack),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 16),
+
+                // Nominal Input
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardWhite,
+                    borderRadius: BorderRadius.circular(20),
+                    border: Border.all(color: AppColors.borderBlack, width: 2),
+                    boxShadow: const [
+                      BoxShadow(
+                        color: AppColors.shadowBlack,
+                        offset: Offset(2, 2.5),
+                        blurRadius: 0,
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Text(
+                        'Rp',
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w900,
+                          color: _selectedType == 'INCOME'
+                              ? const Color(0xFF16A34A)
+                              : isTransfer
+                                  ? AppColors.textBlack
+                                  : const Color(0xFFDC2626),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: TextField(
+                          controller: _amountController,
+                          keyboardType: TextInputType.number,
+                          onChanged: _onAmountChanged,
+                          style: const TextStyle(
+                            fontSize: 22,
+                            fontWeight: FontWeight.w900,
+                            color: AppColors.textBlack,
+                          ),
+                          decoration: const InputDecoration(
+                            border: InputBorder.none,
+                            isDense: true,
+                            hintText: '0',
+                            contentPadding: EdgeInsets.zero,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+
+                // Wadah / Dompet
+                Text(
+                  isTransfer ? 'Dari Rekening Asal:' : 'Wadah / Dompet:',
+                  style: const TextStyle(
+                    fontSize: 12.5,
+                    fontWeight: FontWeight.w800,
+                    color: AppColors.textBlack,
+                  ),
+                ),
+                const SizedBox(height: 6),
+                _buildWalletPickerDropdown(
+                  walletProv: walletProv,
+                  value: _selectedWalletId,
+                  onChanged: (id) {
+                    if (id != null) setState(() => _selectedWalletId = id);
+                  },
+                ),
+
+                if (isTransfer) ...[
+                  const SizedBox(height: 12),
+                  const Text(
+                    'Ke Rekening Tujuan:',
+                    style: TextStyle(
+                      fontSize: 12.5,
+                      fontWeight: FontWeight.w800,
+                      color: AppColors.textBlack,
+                    ),
+                  ),
+                  const SizedBox(height: 6),
+                  _buildWalletPickerDropdown(
+                    walletProv: walletProv,
+                    value: _selectedToWalletId,
+                    hint: 'Pilih rekening tujuan',
+                    excludeId: _selectedWalletId,
+                    onChanged: (id) => setState(() => _selectedToWalletId = id),
+                  ),
+                ],
+
+                const SizedBox(height: 14),
+
+                // Tanggal
+                Row(
+                  children: [
+                    const Text(
+                      'Tanggal:',
+                      style: TextStyle(
+                        fontSize: 12.5,
+                        fontWeight: FontWeight.w800,
+                        color: AppColors.textBlack,
+                      ),
+                    ),
+                    const Spacer(),
+                    GestureDetector(
+                      onTap: _pickDate,
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                        decoration: BoxDecoration(
+                          color: AppColors.cardWhite,
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: AppColors.borderBlack, width: 1.6),
+                        ),
+                        child: Row(
+                          mainAxisSize: MainAxisSize.min,
+                          children: [
+                            const Icon(Icons.calendar_today_rounded, size: 15, color: AppColors.textBlack),
+                            const SizedBox(width: 6),
+                            Text(
+                              DateFormat('d MMMM yyyy', 'id_ID').format(_selectedDate),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w800,
+                                color: AppColors.textBlack,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 14),
+
+                // Catatan
+                NeoTextField(
+                  controller: _descController,
+                  labelText: 'Catatan Transaksi',
+                  hintText: 'Misal: Makan Siang / Beli Pulsa',
+                  prefixIcon: Icons.edit_note_rounded,
+                ),
+                const SizedBox(height: 20),
+
+                // Simpan Perubahan
+                NeoButton(
+                  label: _isSaving ? 'Menyimpan...' : 'Simpan Perubahan',
+                  icon: Icons.check_circle_outline,
+                  backgroundColor: AppColors.primaryYellow,
+                  onPressed: _isSaving ? null : _handleSave,
+                ),
+              ],
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWalletPickerDropdown({
+    required WalletProvider walletProv,
+    required String? value,
+    required ValueChanged<String?> onChanged,
+    String? hint,
+    String? excludeId,
+  }) {
+    final items = walletProv.wallets
+        .where((w) => excludeId == null || w.id != excludeId)
+        .toList();
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+      decoration: BoxDecoration(
+        color: AppColors.cardWhite,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: AppColors.borderBlack, width: 1.8),
+      ),
+      child: DropdownButtonHideUnderline(
+        child: DropdownButton<String>(
+          isExpanded: true,
+          value: items.any((w) => w.id == value) ? value : null,
+          hint: hint != null
+              ? Text(hint, style: const TextStyle(fontSize: 13.5, color: AppColors.textMuted))
+              : null,
+          items: items.map((w) {
+            return DropdownMenuItem(
+              value: w.id,
+              child: Row(
+                children: [
+                  Icon(WalletIconHelper.resolve(w.icon), size: 18, color: AppColors.textBlack),
+                  const SizedBox(width: 8),
+                  Flexible(
+                    child: Text(
+                      '${w.name} (${CurrencyFormatter.formatShort(w.balance)})',
+                      overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          onChanged: onChanged,
         ),
       ),
     );

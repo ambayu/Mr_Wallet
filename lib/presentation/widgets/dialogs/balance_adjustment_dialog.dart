@@ -11,15 +11,27 @@ import '../neo_text_field.dart';
 
 class BalanceAdjustmentDialog extends StatefulWidget {
   final String? initialWalletId;
+  final DateTime? initialMonthDate;
 
-  const BalanceAdjustmentDialog({super.key, this.initialWalletId});
+  const BalanceAdjustmentDialog({
+    super.key,
+    this.initialWalletId,
+    this.initialMonthDate,
+  });
 
-  static Future<void> show(BuildContext context, {String? initialWalletId}) {
+  static Future<void> show(
+    BuildContext context, {
+    String? initialWalletId,
+    DateTime? initialMonthDate,
+  }) {
     return showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
-      builder: (ctx) => BalanceAdjustmentDialog(initialWalletId: initialWalletId),
+      builder: (ctx) => BalanceAdjustmentDialog(
+        initialWalletId: initialWalletId,
+        initialMonthDate: initialMonthDate,
+      ),
     );
   }
 
@@ -134,34 +146,67 @@ class _BalanceAdjustmentDialogState extends State<BalanceAdjustmentDialog> {
               ),
               const SizedBox(height: 20),
 
-              // Wallet Selector Chips
+              // Wallet Selector Dropdown (Wadah Rekening)
               const Text(
                 'Pilih Wadah Rekening:',
                 style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
               ),
               const SizedBox(height: 8),
-              SingleChildScrollView(
-                scrollDirection: Axis.horizontal,
-                child: Row(
-                  children: walletProv.wallets.map((w) {
-                    final isSelected = w.id == _selectedWalletId;
-                    return Padding(
-                      padding: const EdgeInsets.only(right: 8),
-                      child: GestureDetector(
-                        onTap: () {
-                          setState(() {
-                            _selectedWalletId = w.id;
-                          });
-                        },
-                        child: NeoBadge(
-                          text: w.name,
-                          backgroundColor:
-                              isSelected ? AppColors.mintGreen : AppColors.cardWhite,
-                          borderWidth: isSelected ? 2.5 : 1.5,
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                decoration: BoxDecoration(
+                  color: AppColors.cardWhite,
+                  borderRadius: BorderRadius.circular(16),
+                  border: Border.all(color: AppColors.borderBlack, width: 2),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: AppColors.shadowBlack,
+                      offset: Offset(2, 2.5),
+                      blurRadius: 0,
+                    ),
+                  ],
+                ),
+                child: DropdownButtonHideUnderline(
+                  child: DropdownButton<String>(
+                    value: _selectedWalletId,
+                    isExpanded: true,
+                    icon: const Icon(Icons.arrow_drop_down_rounded, size: 28, color: AppColors.textBlack),
+                    dropdownColor: AppColors.cardWhite,
+                    borderRadius: BorderRadius.circular(16),
+                    onChanged: (newId) {
+                      if (newId != null) {
+                        setState(() => _selectedWalletId = newId);
+                      }
+                    },
+                    items: walletProv.wallets.map((w) {
+                      return DropdownMenuItem<String>(
+                        value: w.id,
+                        child: Row(
+                          children: [
+                            const Icon(Icons.account_balance_wallet_rounded, size: 18, color: AppColors.textBlack),
+                            const SizedBox(width: 10),
+                            Text(
+                              w.name,
+                              style: const TextStyle(
+                                fontSize: 14,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.textBlack,
+                              ),
+                            ),
+                            const Spacer(),
+                            Text(
+                              CurrencyFormatter.formatShort(w.balance),
+                              style: const TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w700,
+                                color: AppColors.textMuted,
+                              ),
+                            ),
+                          ],
                         ),
-                      ),
-                    );
-                  }).toList(),
+                      );
+                    }).toList(),
+                  ),
                 ),
               ),
               const SizedBox(height: 16),
@@ -295,6 +340,28 @@ class _BalanceAdjustmentDialogState extends State<BalanceAdjustmentDialog> {
                             context,
                             listen: false);
 
+                        DateTime? recordDate;
+                        if (widget.initialMonthDate != null) {
+                          final now = DateTime.now();
+                          if (widget.initialMonthDate!.year == now.year &&
+                              widget.initialMonthDate!.month == now.month) {
+                            recordDate = now;
+                          } else {
+                            final daysInMonth = DateTime(
+                              widget.initialMonthDate!.year,
+                              widget.initialMonthDate!.month + 1,
+                              0,
+                            ).day;
+                            recordDate = DateTime(
+                              widget.initialMonthDate!.year,
+                              widget.initialMonthDate!.month,
+                              daysInMonth,
+                              23,
+                              59,
+                            );
+                          }
+                        }
+
                         await txProv.reconcileWalletBalance(
                           walletId: _selectedWalletId,
                           actualBalance: _realBalance,
@@ -302,6 +369,7 @@ class _BalanceAdjustmentDialogState extends State<BalanceAdjustmentDialog> {
                           customNote: _noteController.text.trim().isNotEmpty
                               ? _noteController.text.trim()
                               : null,
+                          transactionDate: recordDate,
                         );
 
                         await walletProv.loadWallets();

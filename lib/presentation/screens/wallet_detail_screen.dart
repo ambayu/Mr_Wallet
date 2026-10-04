@@ -514,16 +514,26 @@ class _WalletDetailScreenState extends State<WalletDetailScreen> {
                                           ],
                                         ),
                                       ),
-                                      Text(
-                                        '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(tx.amount)}',
-                                        style: TextStyle(
-                                          fontSize: 13,
-                                          fontWeight: FontWeight.w900,
-                                          color: isIncome
-                                              ? const Color(0xFF16A34A)
-                                              : isTransfer
-                                                  ? AppColors.textBlack
-                                                  : const Color(0xFFDC2626),
+                                      const SizedBox(width: 8),
+                                      ConstrainedBox(
+                                        constraints: BoxConstraints(
+                                          maxWidth: MediaQuery.of(context).size.width * 0.45,
+                                        ),
+                                        child: FittedBox(
+                                          fit: BoxFit.scaleDown,
+                                          alignment: Alignment.centerRight,
+                                          child: Text(
+                                            '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(tx.amount)}',
+                                            style: TextStyle(
+                                              fontSize: 13,
+                                              fontWeight: FontWeight.w900,
+                                              color: isIncome
+                                                  ? const Color(0xFF16A34A)
+                                                  : isTransfer
+                                                      ? AppColors.textBlack
+                                                      : const Color(0xFFDC2626),
+                                            ),
+                                          ),
                                         ),
                                       ),
                                     ],

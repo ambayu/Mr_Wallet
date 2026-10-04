@@ -129,8 +129,10 @@ class TransactionRepository {
     required double actualBalance,
     required String subType, // LOST_MONEY, ADMIN_FEE, INTEREST, REGULAR
     String? customNote,
+    DateTime? transactionDate,
   }) async {
     final db = await _appDatabase.database;
+    final txDate = transactionDate ?? DateTime.now();
 
     return await db.transaction((txn) async {
       // 1. Get current system balance
@@ -187,7 +189,7 @@ class TransactionRepository {
         actualBalanceSnapshot: actualBalance,
         subType: subType,
         description: '$desc [Selisih: Rp ${absDelta.toStringAsFixed(0)}]',
-        transactionDate: DateTime.now(),
+        transactionDate: txDate,
         createdAt: DateTime.now(),
       );
 
@@ -247,7 +249,127 @@ class TransactionRepository {
     });
   }
 
+  // Update existing transaction and adjust balances safely
+  Future<void> updateTransaction(TransactionModel oldTx, TransactionModel newTx) async {
+    final db = await _appDatabase.database;
+
+    await db.transaction((txn) async {
+      // 1. Revert effect of old transaction
+      if (oldTx.type == 'INCOME') {
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance - ? WHERE id = ?',
+          [oldTx.amount, oldTx.walletId],
+        );
+      } else if (oldTx.type == 'EXPENSE') {
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance + ? WHERE id = ?',
+          [oldTx.amount, oldTx.walletId],
+        );
+      } else if (oldTx.type == 'TRANSFER' && oldTx.toWalletId != null) {
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance + ? WHERE id = ?',
+          [oldTx.amount, oldTx.walletId],
+        );
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance - ? WHERE id = ?',
+          [oldTx.amount, oldTx.toWalletId],
+        );
+      } else if (oldTx.type == 'ADJUSTMENT') {
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance - ? WHERE id = ?',
+          [oldTx.amount, oldTx.walletId],
+        );
+      }
+
+      // 2. Apply effect of new transaction
+      if (newTx.type == 'INCOME') {
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance + ? WHERE id = ?',
+          [newTx.amount, newTx.walletId],
+        );
+      } else if (newTx.type == 'EXPENSE') {
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance - ? WHERE id = ?',
+          [newTx.amount, newTx.walletId],
+        );
+      } else if (newTx.type == 'TRANSFER' && newTx.toWalletId != null) {
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance - ? WHERE id = ?',
+          [newTx.amount, newTx.walletId],
+        );
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance + ? WHERE id = ?',
+          [newTx.amount, newTx.toWalletId],
+        );
+      } else if (newTx.type == 'ADJUSTMENT') {
+        await txn.rawUpdate(
+          'UPDATE wallets SET balance = balance + ? WHERE id = ?',
+          [newTx.amount, newTx.walletId],
+        );
+      }
+
+      // 3. Update transaction record
+      await txn.update(
+        'transactions',
+        newTx.toMap(),
+        where: 'id = ?',
+        whereArgs: [newTx.id],
+      );
+    });
+  }
+
   // Analytics helper methods
+  Future<double> getSpendingForDateRange(DateTime start, DateTime end) async {
+    final db = await _appDatabase.database;
+    final startStr = start.toIso8601String();
+    final endStr = end.toIso8601String();
+
+    final result = await db.rawQuery('''
+      SELECT SUM(amount) as total FROM transactions 
+      WHERE type = 'EXPENSE' AND transaction_date >= ? AND transaction_date <= ?
+    ''', [startStr, endStr]);
+
+    final total = result.first['total'];
+    return (total as num?)?.toDouble() ?? 0.0;
+  }
+
+  Future<double> getIncomeForDateRange(DateTime start, DateTime end) async {
+    final db = await _appDatabase.database;
+    final startStr = start.toIso8601String();
+    final endStr = end.toIso8601String();
+
+    final result = await db.rawQuery('''
+      SELECT SUM(amount) as total FROM transactions 
+      WHERE type = 'INCOME' AND transaction_date >= ? AND transaction_date <= ?
+    ''', [startStr, endStr]);
+
+    final total = result.first['total'];
+    return (total as num?)?.toDouble() ?? 0.0;
+  }
+
+  Future<List<Map<String, dynamic>>> getCategorySpendingForDateRange(DateTime start, DateTime end) async {
+    final db = await _appDatabase.database;
+    final startStr = start.toIso8601String();
+    final endStr = end.toIso8601String();
+
+    final result = await db.rawQuery('''
+      SELECT 
+        COALESCE(c.id, 'uncat') as id,
+        COALESCE(c.name, 'Lain-lain') as name,
+        COALESCE(c.icon, 'category') as icon,
+        COALESCE(c.color, 'lavenderPurple') as color,
+        SUM(t.amount) as total_amount,
+        COUNT(t.id) as count
+      FROM transactions t
+      LEFT JOIN categories c ON t.category_id = c.id
+      WHERE t.type = 'EXPENSE' AND t.transaction_date >= ? AND t.transaction_date <= ?
+      GROUP BY c.id, c.name, c.icon, c.color
+      ORDER BY total_amount DESC
+    ''', [startStr, endStr]);
+
+    return result;
+  }
+
   Future<double> getMonthlySpending(DateTime month) async {
     final db = await _appDatabase.database;
     final start = DateTime(month.year, month.month, 1).toIso8601String();

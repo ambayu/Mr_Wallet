@@ -60,13 +60,48 @@ class TransactionProvider extends ChangeNotifier {
     return await _transactionRepository.getTransactionsByMonth(month);
   }
 
-  Future<Map<String, double>> getMonthlySummaryFor(DateTime month) async {
-    final spending = await _transactionRepository.getMonthlySpending(month);
-    final income = await _transactionRepository.getMonthlyIncome(month);
+  Future<Map<String, dynamic>> getAnalyticsForPeriod(String period) async {
+    final now = DateTime.now();
+    DateTime start;
+    DateTime end = DateTime(now.year, now.month, now.day, 23, 59, 59);
+
+    DateTime prevStart;
+    DateTime prevEnd;
+
+    if (period == '3 Bulan') {
+      start = DateTime(now.year, now.month - 2, 1);
+      prevStart = DateTime(now.year, now.month - 5, 1);
+      prevEnd = DateTime(now.year, now.month - 2, 0, 23, 59, 59);
+    } else if (period == 'Tahun') {
+      start = DateTime(now.year, 1, 1);
+      prevStart = DateTime(now.year - 1, 1, 1);
+      prevEnd = DateTime(now.year - 1, 12, 31, 23, 59, 59);
+    } else {
+      // 'Bulan'
+      start = DateTime(now.year, now.month, 1);
+      prevStart = DateTime(now.year, now.month - 1, 1);
+      prevEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
+    }
+
+    final spending = await _transactionRepository.getSpendingForDateRange(start, end);
+    final income = await _transactionRepository.getIncomeForDateRange(start, end);
+    final categories = await _transactionRepository.getCategorySpendingForDateRange(start, end);
+
+    final prevSpending = await _transactionRepository.getSpendingForDateRange(prevStart, prevEnd);
+
+    double growthPct = 0.0;
+    if (prevSpending > 0) {
+      growthPct = ((spending - prevSpending) / prevSpending) * 100.0;
+    } else if (spending > 0) {
+      growthPct = 100.0;
+    }
+
     return {
-      'expense': spending,
+      'spending': spending,
       'income': income,
-      'net': income - spending,
+      'prevSpending': prevSpending,
+      'growthPercentage': growthPct,
+      'categories': categories,
     };
   }
 
@@ -151,6 +186,7 @@ class TransactionProvider extends ChangeNotifier {
     required double actualBalance,
     required String subType, // LOST_MONEY, ADMIN_FEE, INTEREST, REGULAR
     String? customNote,
+    DateTime? transactionDate,
   }) async {
     final txId = 'adj_${const Uuid().v4().substring(0, 8)}';
     final result = await _transactionRepository.reconcileWalletBalance(
@@ -159,10 +195,16 @@ class TransactionProvider extends ChangeNotifier {
       actualBalance: actualBalance,
       subType: subType,
       customNote: customNote,
+      transactionDate: transactionDate,
     );
 
     await refreshTransactions();
     return result;
+  }
+
+  Future<void> updateTransaction(TransactionModel oldTx, TransactionModel newTx) async {
+    await _transactionRepository.updateTransaction(oldTx, newTx);
+    await refreshTransactions();
   }
 
   Future<void> deleteTransaction(TransactionModel transaction) async {

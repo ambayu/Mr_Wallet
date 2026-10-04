@@ -8,9 +8,13 @@ import '../providers/auth_provider.dart';
 import '../providers/savings_goal_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../widgets/dialogs/add_savings_goal_dialog.dart';
+import '../widgets/dialogs/ai_text_modal.dart';
 import '../widgets/dialogs/camera_bill_snap_modal.dart';
+import '../widgets/neo_button.dart';
 import '../widgets/neo_card.dart';
 import 'settings_screen.dart';
+import 'tasks_screen.dart';
 
 class HomeScreen extends StatelessWidget {
   final VoidCallback onSeeAllTransactions;
@@ -59,7 +63,7 @@ class HomeScreen extends StatelessWidget {
             child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                // 1. Clean Top Header: Halo, [Name]! 👋 + Subtitle & Avatar on Right
+                // 1. Clean Top Header: Halo, [Name]! + Subtitle & Avatar on Right
                 Row(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   mainAxisAlignment: MainAxisAlignment.spaceBetween,
@@ -69,7 +73,7 @@ class HomeScreen extends StatelessWidget {
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           Text(
-                            'Halo, $displayName! 👋',
+                            'Halo, $displayName!',
                             style: const TextStyle(
                               fontSize: 27,
                               fontWeight: FontWeight.w900,
@@ -247,9 +251,9 @@ class HomeScreen extends StatelessWidget {
                 ),
                 const SizedBox(height: 20),
 
-                // 3. Quick Action Buttons: [Tabung (Riwayat & Catat)], [Target Tabungan], [Scan Struk]
+                // 3. Quick Action Buttons: [Tabung], [Target Tabungan], [Jadwal Task], [Scan Struk]
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
                   children: [
                     // Tombol Utama "Tabung": Pindah langsung ke Halaman Riwayat Transaksi Bulanan
                     _buildQuickAction(
@@ -267,13 +271,25 @@ class HomeScreen extends StatelessWidget {
                     ),
                     _buildQuickAction(
                       context: context,
-                      label: 'Target Tabungan',
+                      label: 'Target',
                       icon: Icons.business_center_rounded,
                       bgColor: const Color(0xFFBCE7FE), // Sky Blue Pastel
                       onTap: () {
                         if (onNavigateTab != null) {
                           onNavigateTab!(3); // Go to Tabungan Goals Tab
                         }
+                      },
+                    ),
+                    _buildQuickAction(
+                      context: context,
+                      label: 'Jadwal Task',
+                      icon: Icons.calendar_month_rounded,
+                      bgColor: const Color(0xFFFFE082), // Amber Pastel
+                      onTap: () {
+                        Navigator.push(
+                          context,
+                          MaterialPageRoute(builder: (_) => const TasksScreen()),
+                        );
                       },
                     ),
                     _buildQuickAction(
@@ -285,115 +301,136 @@ class HomeScreen extends StatelessWidget {
                     ),
                   ],
                 ),
-                const SizedBox(height: 24),
+                const SizedBox(height: 16),
 
-                // 4. White Bottom Card Section: "Tujuan Keuangan" & "Ayo Nabung!"
-                Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 20),
-                  decoration: BoxDecoration(
-                    color: Colors.white,
-                    borderRadius: BorderRadius.circular(28),
-                    border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-                    boxShadow: const [
-                      BoxShadow(
-                        color: Color(0x0A000000),
-                        offset: Offset(0, 4),
-                        blurRadius: 16,
-                      ),
-                    ],
-                  ),
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      // Header: Tujuan Keuangan + Lihat Semua
-                      Row(
-                        mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                        children: [
-                          const Text(
-                            'Tujuan Keuangan',
+                // AI Quick Input Prompt Bar (Ketik Bebas / Foto Struk)
+                GestureDetector(
+                  onTap: () => AITextModal.show(context),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardWhite,
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                      boxShadow: const [
+                        BoxShadow(
+                          color: AppColors.shadowBlack,
+                          offset: Offset(2, 2.5),
+                          blurRadius: 0,
+                        ),
+                      ],
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.auto_awesome, color: Color(0xFF8B5CF6), size: 18),
+                        const SizedBox(width: 8),
+                        const Expanded(
+                          child: Text(
+                            'Untuk apa dan berapa harganya? (Ketik bebas / AI)',
                             style: TextStyle(
-                              fontSize: 17,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textBlack,
+                              fontSize: 12.5,
+                              fontWeight: FontWeight.w800,
+                              color: AppColors.textMuted,
                             ),
                           ),
-                          GestureDetector(
-                            onTap: () {
-                              if (onNavigateTab != null) {
-                                onNavigateTab!(3); // Go to Tabungan
-                              }
-                            },
-                            child: const Text(
-                              'Lihat Semua',
-                              style: TextStyle(
-                                fontSize: 13,
-                                fontWeight: FontWeight.w800,
-                                color: Color(0xFF2563EB),
-                              ),
+                        ),
+                        GestureDetector(
+                          onTap: () => CameraBillSnapModal.show(context),
+                          child: Container(
+                            padding: const EdgeInsets.all(6),
+                            decoration: BoxDecoration(
+                              color: AppColors.butterYellow,
+                              shape: BoxShape.circle,
+                              border: Border.all(color: AppColors.borderBlack, width: 1.4),
                             ),
+                            child: const Icon(Icons.camera_alt_outlined, size: 16, color: AppColors.textBlack),
                           ),
-                        ],
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 20),
+
+                // 4. Section: "Tujuan Keuangan" & Mascot Banner (Langsung di Body Latar Belakang)
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    const Text(
+                      'Tujuan Keuangan',
+                      style: TextStyle(
+                        fontSize: 17,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textBlack,
+                        letterSpacing: -0.3,
                       ),
-                      const SizedBox(height: 14),
+                    ),
+                    GestureDetector(
+                      onTap: () {
+                        if (onNavigateTab != null) {
+                          onNavigateTab!(3); // Go to Tabungan
+                        }
+                      },
+                      child: const Text(
+                        'Lihat Semua',
+                        style: TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w800,
+                          color: Color(0xFF2563EB),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+                const SizedBox(height: 12),
 
-                      // Goal Card Item (Pencapaian Teratas)
-                      if (goalProv.goals.isNotEmpty)
-                        _buildTopGoalCard(context, goalProv.goals.first)
-                      else
-                        _buildGoalEmptyState(context),
-                      const SizedBox(height: 16),
+                // Goal Card Items (Maksimal 3 Pencapaian Aktif Teratas)
+                if (goalProv.activeGoals.isNotEmpty) ...[
+                  ...goalProv.activeGoals.take(3).map((goal) => Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: _buildTopGoalCard(context, goal),
+                      )),
+                ] else
+                  _buildGoalEmptyState(context),
+                const SizedBox(height: 16),
 
-                      // "Ayo Nabung!" Yellow Mascot Banner Card
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-                        decoration: BoxDecoration(
-                          color: const Color(0xFFFFEB85),
-                          borderRadius: BorderRadius.circular(22),
-                          border: Border.all(color: AppColors.borderBlack, width: 2),
-                          boxShadow: const [
-                            BoxShadow(
-                              color: AppColors.shadowBlack,
-                              offset: Offset(2, 2.5),
-                              blurRadius: 0,
+                // Mascot Tropical Vacation Banner Card (Sesuai Gambar 2)
+                NeoCard(
+                  width: double.infinity,
+                  backgroundColor: const Color(0xFFFFEB85),
+                  borderRadius: 24,
+                  borderWidth: 2.2,
+                  clipBehavior: false,
+                  padding: const EdgeInsets.fromLTRB(16, 20, 0, 0),
+                  child: Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 24, right: 140),
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: const [
+                            Text(
+                              'Sedikit demi sedikit,\nlama-lama jadi banyak!',
+                              style: TextStyle(
+                                fontSize: 14.5,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.textBlack,
+                                height: 1.25,
+                              ),
                             ),
                           ],
                         ),
-                        child: Row(
-                          children: [
-                            Image.asset(
-                              AppAssets.mascotLogin,
-                              width: 65,
-                              height: 65,
-                              fit: BoxFit.contain,
-                            ),
-                            const SizedBox(width: 12),
-                            Expanded(
-                              child: Column(
-                                crossAxisAlignment: CrossAxisAlignment.start,
-                                children: const [
-                                  Text(
-                                    'Ayo Nabung!',
-                                    style: TextStyle(
-                                      fontSize: 16,
-                                      fontWeight: FontWeight.w900,
-                                      color: AppColors.textBlack,
-                                    ),
-                                  ),
-                                  SizedBox(height: 3),
-                                  Text(
-                                    'Masa depan cerah\nmulai dari sekarang',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w700,
-                                      color: AppColors.textBlack,
-                                      height: 1.2,
-                                    ),
-                                  ),
-                                ],
-                              ),
-                            ),
-                          ],
+                      ),
+                      // Mascot Crab Tropical Vacation on Float (tembus/nongol ke luar card)
+                      Positioned(
+                        right: -8,
+                        bottom: -28,
+                        child: Image.asset(
+                          AppAssets.mascotTropical,
+                          width: 145,
+                          height: 145,
+                          fit: BoxFit.contain,
                         ),
                       ),
                     ],
@@ -424,91 +461,236 @@ class HomeScreen extends StatelessWidget {
   Widget _buildTopGoalCard(BuildContext context, SavingsGoalModel goal) {
     final iconData = _goalIconMap[goal.icon] ?? Icons.savings_rounded;
 
-    return Container(
-      padding: const EdgeInsets.all(14),
-      decoration: BoxDecoration(
-        color: const Color(0xFFF8FAFC),
-        borderRadius: BorderRadius.circular(20),
-        border: Border.all(color: const Color(0xFFE2E8F0), width: 1.5),
-      ),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 48,
-                height: 48,
-                decoration: BoxDecoration(
-                  color: AppColors.fromHex(goal.color),
-                  borderRadius: BorderRadius.circular(16),
-                  border:
-                      Border.all(color: AppColors.borderBlack, width: 1.5),
-                ),
-                child: Center(
-                  child: Icon(iconData,
-                      size: 24, color: AppColors.textBlack),
-                ),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      goal.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 15,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textBlack,
-                      ),
-                    ),
-                    const SizedBox(height: 3),
-                    Text(
-                      '${CurrencyFormatter.formatShort(goal.savedAmount)} / ${CurrencyFormatter.formatShort(goal.targetAmount)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textMuted,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-              Text(
-                '${goal.progressPercent}%',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textBlack,
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 12),
-          // Progress bar
-          ClipRRect(
-            borderRadius: BorderRadius.circular(10),
-            child: Container(
-              height: 8,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(10),
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: goal.progress,
-                child: Container(
+    return GestureDetector(
+      onTap: () => _showHomeGoalActionSheet(context, goal),
+      child: NeoCard(
+        backgroundColor: AppColors.cardWhite,
+        borderRadius: 18,
+        borderWidth: 1.8,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
                   decoration: BoxDecoration(
-                    color: const Color(0xFF10B981),
-                    borderRadius: BorderRadius.circular(10),
+                    color: AppColors.fromHex(goal.color),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.borderBlack, width: 1.5),
                   ),
+                  child: Center(
+                    child: Icon(iconData, size: 20, color: AppColors.textBlack),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        goal.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14.5,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.textBlack,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0F2FE),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.borderBlack, width: 1.2),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.account_balance_wallet_rounded, size: 12, color: AppColors.textBlack),
+                                const SizedBox(width: 4.5),
+                                Text(
+                                  goal.walletName ?? 'Dompet Utama',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textBlack,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: RichText(
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: CurrencyFormatter.formatShort(goal.effectiveSavedAmount),
+                                    style: const TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF16A34A),
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                    text: ' / ',
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: CurrencyFormatter.formatShort(goal.targetAmount),
+                                    style: const TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.textBlack,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Progress Bar & Persentase Sebaris (Loading dari kiri ke kanan)
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      height: 9,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: goal.progress,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${goal.progressPercent}%',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textBlack,
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showHomeGoalActionSheet(BuildContext context, SavingsGoalModel goal) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        decoration: const BoxDecoration(
+          color: AppColors.cardWhite,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(
+            top: BorderSide(color: AppColors.borderBlack, width: 2.5),
+            left: BorderSide(color: AppColors.borderBlack, width: 2.5),
+            right: BorderSide(color: AppColors.borderBlack, width: 2.5),
+          ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderBlack.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-          ),
-        ],
+            const SizedBox(height: 16),
+            Text(
+              goal.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: AppColors.textBlack,
+              ),
+            ),
+            const SizedBox(height: 4),
+            Text(
+              '${CurrencyFormatter.formatRupiah(goal.effectiveSavedAmount)} / ${CurrencyFormatter.formatRupiah(goal.targetAmount)} (${goal.progressPercent}%)',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: NeoButton(
+                    label: 'Edit',
+                    icon: Icons.edit_rounded,
+                    backgroundColor: AppColors.butterYellow,
+                    textColor: AppColors.textBlack,
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      AddSavingsGoalDialog.show(context, existing: goal);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: NeoButton(
+                    label: 'Hapus',
+                    icon: Icons.delete_outline_rounded,
+                    backgroundColor: const Color(0xFFFFE4E6),
+                    textColor: AppColors.dangerRed,
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _confirmDeleteHomeGoal(context, goal);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
       ),
     );
   }
@@ -539,6 +721,46 @@ class HomeScreen extends StatelessWidget {
         ],
       ),
     );
+  }
+
+  Future<void> _confirmDeleteHomeGoal(BuildContext context, SavingsGoalModel goal) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.butterYellow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.borderBlack, width: 2.2),
+        ),
+        title: const Text(
+          'Hapus Pencapaian?',
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+        ),
+        content: Text('"${goal.name}" akan dihapus permanen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: AppColors.textBlack, fontWeight: FontWeight.w800)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus', style: TextStyle(color: AppColors.dangerRed, fontWeight: FontWeight.w900)),
+          ),
+        ],
+      ),
+    );
+
+    if (confirmed == true && context.mounted) {
+      await Provider.of<SavingsGoalProvider>(context, listen: false).deleteGoal(goal.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pencapaian berhasil dihapus'),
+            backgroundColor: AppColors.textBlack,
+          ),
+        );
+      }
+    }
   }
 
   Widget _buildQuickAction({

@@ -59,9 +59,9 @@ class _LandingScreenState extends State<LandingScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              _buildPrimaryButton(context),
+              _buildLoginButton(context),
               const SizedBox(height: 12),
-              _buildSecondaryButton(context),
+              _buildRegisterButton(context),
               const SizedBox(height: 18),
               _buildDotsIndicator(),
               const SizedBox(height: 12),
@@ -90,9 +90,9 @@ class _LandingScreenState extends State<LandingScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Expanded(child: _buildPrimaryButton(context, height: 48)),
+                        Expanded(child: _buildLoginButton(context, height: 48)),
                         const SizedBox(width: 12),
-                        Expanded(child: _buildSecondaryButton(context, height: 48)),
+                        Expanded(child: _buildRegisterButton(context, height: 48)),
                       ],
                     ),
                     const SizedBox(height: 10),
@@ -112,13 +112,13 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
-  Widget _buildPrimaryButton(BuildContext context, {double height = 56}) {
+  Widget _buildLoginButton(BuildContext context, {double height = 56}) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const RegisterScreen(),
+            builder: (_) => const LoginScreen(),
           ),
         );
       },
@@ -144,7 +144,7 @@ class _LandingScreenState extends State<LandingScreen> {
           mainAxisAlignment: MainAxisAlignment.center,
           children: [
             Text(
-              'Mulai Sekarang',
+              'Masuk Akun',
               style: TextStyle(
                 fontSize: 15,
                 fontWeight: FontWeight.w800,
@@ -164,13 +164,13 @@ class _LandingScreenState extends State<LandingScreen> {
     );
   }
 
-  Widget _buildSecondaryButton(BuildContext context, {double height = 54}) {
+  Widget _buildRegisterButton(BuildContext context, {double height = 54}) {
     return GestureDetector(
       onTap: () {
         Navigator.push(
           context,
           MaterialPageRoute(
-            builder: (_) => const LoginScreen(),
+            builder: (_) => const RegisterScreen(),
           ),
         );
       },
@@ -194,7 +194,7 @@ class _LandingScreenState extends State<LandingScreen> {
         ),
         child: const Center(
           child: Text(
-            'Masuk ke Akun',
+            'Daftar Sekarang',
             style: TextStyle(
               fontSize: 15,
               fontWeight: FontWeight.w800,

@@ -14,7 +14,7 @@ class NeoButton extends StatefulWidget {
   final double borderRadius;
   final double borderWidth;
   final Offset shadowOffset;
-  final EdgeInsetsGeometry padding;
+  final EdgeInsetsGeometry? padding;
 
   const NeoButton({
     super.key,
@@ -30,7 +30,7 @@ class NeoButton extends StatefulWidget {
     this.borderRadius = 28.0,
     this.borderWidth = 2.0,
     this.shadowOffset = const Offset(2.5, 3.0),
-    this.padding = const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0),
+    this.padding,
   });
 
   @override
@@ -63,7 +63,10 @@ class _NeoButtonState extends State<NeoButton> {
         child: Container(
           height: widget.height,
           width: widget.width,
-          padding: widget.padding,
+          padding: widget.padding ??
+              (widget.height < 46
+                  ? const EdgeInsets.symmetric(horizontal: 14.0, vertical: 4.0)
+                  : const EdgeInsets.symmetric(horizontal: 20.0, vertical: 12.0)),
           decoration: BoxDecoration(
             color: widget.onPressed == null
                 ? AppColors.pillGray
@@ -90,21 +93,29 @@ class _NeoButtonState extends State<NeoButton> {
                   mainAxisAlignment: MainAxisAlignment.center,
                   children: [
                     if (widget.icon != null) ...[
-                      Icon(widget.icon, color: widget.textColor, size: 20),
-                      const SizedBox(width: 8),
+                      Icon(
+                        widget.icon,
+                        color: widget.textColor,
+                        size: widget.height < 46 ? 16 : 20,
+                      ),
+                      const SizedBox(width: 6),
                     ],
                     if (widget.label != null)
-                      Text(
-                        widget.label!,
-                        style: TextStyle(
-                          color: widget.textColor,
-                          fontSize: 15,
-                          fontWeight: FontWeight.w900,
-                          letterSpacing: 0.2,
+                      Flexible(
+                        child: Text(
+                          widget.label!,
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(
+                            color: widget.textColor,
+                            fontSize: widget.height < 46 ? 13 : 15,
+                            fontWeight: FontWeight.w900,
+                            letterSpacing: 0.2,
+                          ),
                         ),
                       ),
                     if (widget.trailingIcon != null) ...[
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 6),
                       widget.trailingIcon!,
                     ],
                   ],

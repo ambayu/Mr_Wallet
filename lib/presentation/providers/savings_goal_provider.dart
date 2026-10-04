@@ -15,10 +15,13 @@ class SavingsGoalProvider extends ChangeNotifier {
   List<SavingsGoalModel> get goals => _goals;
   bool get isLoading => _isLoading;
 
-  double get totalTarget =>
-      _goals.fold(0.0, (sum, g) => sum + g.targetAmount);
+  List<SavingsGoalModel> get activeGoals => _goals.where((g) => !g.isCompleted).toList();
+  List<SavingsGoalModel> get completedGoals => _goals.where((g) => g.isCompleted).toList();
 
-  double get totalSaved => _goals.fold(0.0, (sum, g) => sum + g.savedAmount);
+  double get totalTarget =>
+      activeGoals.fold(0.0, (sum, g) => sum + g.targetAmount);
+
+  double get totalSaved => activeGoals.fold(0.0, (sum, g) => sum + g.effectiveSavedAmount);
 
   Future<void> loadGoals() async {
     _isLoading = true;
@@ -41,6 +44,7 @@ class SavingsGoalProvider extends ChangeNotifier {
     DateTime? deadline,
     String icon = 'savings',
     String color = '#D6F0FF',
+    String? walletId,
   }) async {
     final goal = SavingsGoalModel(
       id: 'sg_${const Uuid().v4().substring(0, 8)}',
@@ -50,6 +54,7 @@ class SavingsGoalProvider extends ChangeNotifier {
       deadline: deadline,
       icon: icon,
       color: color,
+      walletId: walletId,
     );
     await _repository.insertGoal(goal);
     await loadGoals();
@@ -57,6 +62,36 @@ class SavingsGoalProvider extends ChangeNotifier {
 
   Future<void> updateGoal(SavingsGoalModel goal) async {
     await _repository.updateGoal(goal);
+    await loadGoals();
+  }
+
+  Future<bool> completeGoalWithFinancialAction({
+    required SavingsGoalModel goal,
+    required String walletId,
+  }) async {
+    final success = await _repository.completeGoalWithFinancialDeduction(
+      goal: goal,
+      walletId: walletId,
+    );
+    if (success) {
+      await loadGoals();
+    }
+    return success;
+  }
+
+  Future<void> revertGoalCompletion(SavingsGoalModel goal) async {
+    await _repository.revertGoalCompletion(goal: goal);
+    await loadGoals();
+  }
+
+  Future<void> toggleGoalCompletion(SavingsGoalModel goal) async {
+    final newStatus = !goal.isCompleted;
+    final updated = goal.copyWith(
+      isCompleted: newStatus,
+      completedAt: newStatus ? DateTime.now() : null,
+      clearCompletedAt: !newStatus,
+    );
+    await _repository.updateGoal(updated);
     await loadGoals();
   }
 

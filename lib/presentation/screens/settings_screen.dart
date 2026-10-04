@@ -2,12 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
-import '../../core/services/ai_service.dart';
 import '../providers/auth_provider.dart';
 import '../widgets/neo_button.dart';
 import '../widgets/neo_card.dart';
 import '../widgets/neo_header_card.dart';
-import '../widgets/neo_text_field.dart';
 import 'auth/landing_screen.dart';
 import 'notification_screen.dart';
 
@@ -19,99 +17,6 @@ class SettingsScreen extends StatefulWidget {
 }
 
 class _SettingsScreenState extends State<SettingsScreen> {
-  final TextEditingController _apiKeyController = TextEditingController();
-  String _currentKey = '';
-
-  @override
-  void initState() {
-    super.initState();
-    _loadApiKey();
-  }
-
-  Future<void> _loadApiKey() async {
-    final key = await AIService.instance.getApiKey();
-    setState(() {
-      _currentKey = key;
-      _apiKeyController.text = key;
-    });
-  }
-
-  @override
-  void dispose() {
-    _apiKeyController.dispose();
-    super.dispose();
-  }
-
-  void _showApiKeyDialog() {
-    showModalBottomSheet(
-      context: context,
-      isScrollControlled: true,
-      backgroundColor: Colors.transparent,
-      builder: (ctx) => Padding(
-        padding: EdgeInsets.only(
-          bottom: MediaQuery.of(ctx).viewInsets.bottom,
-        ),
-        child: Container(
-          padding: const EdgeInsets.all(22),
-          decoration: const BoxDecoration(
-            color: AppColors.bgCream,
-            borderRadius: BorderRadius.vertical(top: Radius.circular(28)),
-            border: Border(
-              top: BorderSide(color: AppColors.borderBlack, width: 2.2),
-              left: BorderSide(color: AppColors.borderBlack, width: 2.2),
-              right: BorderSide(color: AppColors.borderBlack, width: 2.2),
-            ),
-          ),
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text(
-                'Gemini AI API Key',
-                style: TextStyle(
-                  fontSize: 18,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textBlack,
-                ),
-              ),
-              const SizedBox(height: 6),
-              const Text(
-                'Digunakan untuk Vision OCR struk belanja & Voice AI Assistant tingkat lanjut.',
-                style: TextStyle(fontSize: 12, color: AppColors.textMuted),
-              ),
-              const SizedBox(height: 16),
-              NeoTextField(
-                controller: _apiKeyController,
-                hintText: 'AIzaSy...',
-                prefixIcon: Icons.key_rounded,
-                backgroundColor: AppColors.cardWhite,
-              ),
-              const SizedBox(height: 18),
-              NeoButton(
-                label: 'Simpan API Key',
-                backgroundColor: AppColors.primaryYellow,
-                height: 48,
-                borderRadius: 24,
-                onPressed: () async {
-                  await AIService.instance.saveApiKey(_apiKeyController.text.trim());
-                  await _loadApiKey();
-                  if (ctx.mounted) {
-                    Navigator.pop(ctx);
-                  }
-                  if (mounted) {
-                    ScaffoldMessenger.of(context).showSnackBar(
-                      const SnackBar(content: Text('API Key berhasil disimpan!')),
-                    );
-                  }
-                },
-              ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   @override
   Widget build(BuildContext context) {
     final authProv = Provider.of<AuthProvider>(context);
@@ -121,16 +26,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
     return Scaffold(
       backgroundColor: const Color(0xFFFEF8A7),
-      appBar: NeoHeaderCard(
+      appBar: const NeoHeaderCard(
         title: 'Profil & Pengaturan',
         subtitle: 'Konfigurasi akun dan sistem',
-        actions: [
-          IconButton(
-            icon: const Icon(Icons.settings_outlined, color: AppColors.textBlack),
-            onPressed: _showApiKeyDialog,
-            tooltip: 'Konfigurasi AI',
-          ),
-        ],
       ),
       body: SafeArea(
         child: SingleChildScrollView(
@@ -271,13 +169,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
                       title: 'Bahasa',
                       subtitle: 'Bahasa Indonesia',
                       onTap: () {},
-                    ),
-                    const Divider(height: 1, indent: 56, endIndent: 20),
-                    _buildMenuItem(
-                      icon: Icons.smart_toy_outlined,
-                      title: 'Koneksi Cloud AI',
-                      subtitle: _currentKey.isNotEmpty ? 'Aktif (Gemini Flash)' : 'Belum Dikonfigurasi',
-                      onTap: _showApiKeyDialog,
                     ),
                     const Divider(height: 1, indent: 56, endIndent: 20),
                     _buildMenuItem(

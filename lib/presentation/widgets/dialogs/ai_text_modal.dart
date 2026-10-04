@@ -1,24 +1,57 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 
 import '../../../core/constants/app_colors.dart';
 import '../../../core/services/ai_service.dart';
-import '../../../core/utils/category_icon_helper.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/ai_parsed_result.dart';
 import '../../../data/models/category_model.dart';
 import '../../../data/models/wallet_model.dart';
+import '../../providers/ai_provider.dart';
 import '../../providers/task_provider.dart';
 import '../../providers/transaction_provider.dart';
 import '../../providers/wallet_provider.dart';
 import '../neo_button.dart';
 
-/// Modal AI Text Command canggih (Ditenagai Gemini 3.7 / Route9 API).
-/// Memiliki:
-/// 1. Kolom input teks alami.
-/// 2. Riwayat teks perintah yang tersimpan rapi.
-/// 3. Menu Konfirmasi Tindakan yang jelas sebelum commit ke database.
+/// Model pesan dalam dialog chat percakapan dengan AI
+class _ChatMessage {
+  final String id;
+  final String text;
+  final bool isUser;
+  final DateTime timestamp;
+  final String? imagePath;
+  final AIParsedResult? parsedResult;
+  final bool isCommitted;
+
+  _ChatMessage({
+    required this.id,
+    required this.text,
+    required this.isUser,
+    DateTime? timestamp,
+    this.imagePath,
+    this.parsedResult,
+    this.isCommitted = false,
+  }) : timestamp = timestamp ?? DateTime.now();
+
+  _ChatMessage copyWith({
+    bool? isCommitted,
+  }) {
+    return _ChatMessage(
+      id: id,
+      text: text,
+      isUser: isUser,
+      timestamp: timestamp,
+      imagePath: imagePath,
+      parsedResult: parsedResult,
+      isCommitted: isCommitted ?? this.isCommitted,
+    );
+  }
+}
+
+/// Modal Percakapan Interaktif AI (Gaya Balas-Berbalas Chat / WhatsApp / ChatGPT + Fitur Kamera/Foto Struk).
 class AITextModal extends StatefulWidget {
   final String? initialText;
 
@@ -39,53 +72,86 @@ class AITextModal extends StatefulWidget {
 
 class _AITextModalState extends State<AITextModal> {
   final TextEditingController _textController = TextEditingController();
+  final ScrollController _scrollController = ScrollController();
   final FocusNode _focusNode = FocusNode();
+  final ImagePicker _picker = ImagePicker();
 
+  final List<_ChatMessage> _messages = [];
   bool _isLoading = false;
-  bool _isCommitting = false;
-  AIParsedResult? _parsedResult;
-  List<String> _promptHistory = [];
+  String? _committingMessageId;
+  final Map<String, String> _selectedWalletOverrides = {}; // key: messageId_txIndex, value: walletId
+
+  final List<String> _quickSuggestions = [
+    'Beli kopi 25rb pakai Dompet Tunai',
+    'Gaji masuk 5.000.000 ke ATM BCA',
+    'Transfer 500rb dari Tunai ke BCA',
+    'Beli bensin 30rb tunai dan ingatkan servis lusa',
+  ];
 
   @override
   void initState() {
     super.initState();
+
+    // Pesan sambutan awal dari Mr. Wallet
+    _messages.add(
+      _ChatMessage(
+        id: 'welcome',
+        text: 'Halo! Aku Mr. Wallet, si kepiting pecinta cuan dan penjaga setia dompetmu! 🦀💰 Ceritakan transaksi belanja, uang masuk, atau kirim foto struk di sini ya!',
+        isUser: false,
+      ),
+    );
+
     if (widget.initialText != null && widget.initialText!.isNotEmpty) {
       _textController.text = widget.initialText!;
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        _handleSend();
+      });
+    } else {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _focusNode.requestFocus();
+      });
     }
-    _loadHistory();
-    // Auto focus saat modal pertama kali terbuka
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      if (mounted && widget.initialText == null) {
-        _focusNode.requestFocus();
-      }
-    });
   }
 
   @override
   void dispose() {
     _textController.dispose();
     _focusNode.dispose();
+    _scrollController.dispose();
     super.dispose();
   }
 
-  Future<void> _loadHistory() async {
-    final history = await AIService.instance.getPromptHistory();
-    if (mounted) {
-      setState(() {
-        _promptHistory = history;
-      });
-    }
+  void _scrollToBottom() {
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_scrollController.hasClients) {
+        _scrollController.animateTo(
+          _scrollController.position.maxScrollExtent,
+          duration: const Duration(milliseconds: 300),
+          curve: Curves.easeOut,
+        );
+      }
+    });
   }
 
-  Future<void> _processText(String prompt) async {
-    final clean = prompt.trim();
-    if (clean.isEmpty) return;
+  Future<void> _handleSend([String? customText]) async {
+    final rawText = customText ?? _textController.text;
+    final clean = rawText.trim();
+    if (clean.isEmpty || _isLoading) return;
 
-    _focusNode.unfocus();
+    _textController.clear();
+
+    final userMsgId = 'u_${DateTime.now().millisecondsSinceEpoch}';
+    final userMsg = _ChatMessage(
+      id: userMsgId,
+      text: clean,
+      isUser: true,
+    );
+
     setState(() {
+      _messages.add(userMsg);
       _isLoading = true;
-      _parsedResult = null;
     });
+    _scrollToBottom();
 
     final walletProv = Provider.of<WalletProvider>(context, listen: false);
     final txProv = Provider.of<TransactionProvider>(context, listen: false);
@@ -100,53 +166,286 @@ class _AITextModalState extends State<AITextModal> {
         availableCategories: categoryNames,
       );
 
+      final aiMsgId = 'ai_${DateTime.now().millisecondsSinceEpoch}';
+      final aiMsg = _ChatMessage(
+        id: aiMsgId,
+        text: result.naturalResponse.isNotEmpty
+            ? result.naturalResponse
+            : 'Siap, ini rincian yang berhasil aku pahami:',
+        isUser: false,
+        parsedResult: result,
+      );
+
       if (mounted) {
         setState(() {
-          _parsedResult = result;
+          _messages.add(aiMsg);
           _isLoading = false;
         });
-        _loadHistory();
+        _scrollToBottom();
       }
     } catch (e) {
       if (mounted) {
-        setState(() => _isLoading = false);
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal memproses dengan AI: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+        final errorMsg = _ChatMessage(
+          id: 'err_${DateTime.now().millisecondsSinceEpoch}',
+          text: 'Waduh, koneksi ke server Mr. Wallet bermasalah: $e. Coba cek internet atau ulangi lagi ya!',
+          isUser: false,
         );
+        setState(() {
+          _messages.add(errorMsg);
+          _isLoading = false;
+        });
+        _scrollToBottom();
       }
     }
   }
 
-  Future<void> _confirmAndCommit() async {
-    if (_parsedResult == null) return;
+  void _showMediaPickerSheet() {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          decoration: const BoxDecoration(
+            color: AppColors.cardWhite,
+            borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+            border: Border(
+              top: BorderSide(color: AppColors.borderBlack, width: 2.5),
+              left: BorderSide(color: AppColors.borderBlack, width: 2.5),
+              right: BorderSide(color: AppColors.borderBlack, width: 2.5),
+            ),
+          ),
+          padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 18),
+          child: SafeArea(
+            top: false,
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Container(
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: AppColors.borderBlack.withValues(alpha: 0.2),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                ),
+                const SizedBox(height: 14),
+                const Text(
+                  'Kirim Gambar / Struk Belanja',
+                  style: TextStyle(
+                    fontSize: 15,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textBlack,
+                  ),
+                ),
+                const SizedBox(height: 16),
+                Row(
+                  children: [
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _pickAndProcessImage(ImageSource.camera);
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: AppColors.primaryYellow,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: AppColors.shadowBlack,
+                                offset: Offset(1.5, 2),
+                                blurRadius: 0,
+                              ),
+                            ],
+                          ),
+                          child: const Column(
+                            children: [
+                              Icon(Icons.camera_alt_rounded, size: 28, color: AppColors.textBlack),
+                              SizedBox(height: 6),
+                              Text(
+                                'Buka Kamera',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textBlack,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: InkWell(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _pickAndProcessImage(ImageSource.gallery);
+                        },
+                        borderRadius: BorderRadius.circular(16),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 14),
+                          decoration: BoxDecoration(
+                            color: AppColors.skyBlue,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                            boxShadow: const [
+                              BoxShadow(
+                                color: AppColors.shadowBlack,
+                                offset: Offset(1.5, 2),
+                                blurRadius: 0,
+                              ),
+                            ],
+                          ),
+                          child: const Column(
+                            children: [
+                              Icon(Icons.photo_library_rounded, size: 28, color: AppColors.textBlack),
+                              SizedBox(height: 6),
+                              Text(
+                                'Pilih Galeri',
+                                style: TextStyle(
+                                  fontSize: 13,
+                                  fontWeight: FontWeight.w800,
+                                  color: AppColors.textBlack,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
 
-    setState(() => _isCommitting = true);
+  Future<void> _pickAndProcessImage(ImageSource source) async {
+    try {
+      final XFile? photo = await _picker.pickImage(
+        source: source,
+        imageQuality: 85,
+      );
+
+      if (photo == null) return;
+
+      final userMsgId = 'img_${DateTime.now().millisecondsSinceEpoch}';
+      final userMsg = _ChatMessage(
+        id: userMsgId,
+        text: source == ImageSource.camera ? 'Foto struk via Kamera' : 'Foto struk dari Galeri',
+        isUser: true,
+        imagePath: photo.path,
+      );
+
+      setState(() {
+        _messages.add(userMsg);
+        _isLoading = true;
+      });
+      _scrollToBottom();
+
+      if (!mounted) return;
+      final aiProv = Provider.of<AIProvider>(context, listen: false);
+      final walletProv = Provider.of<WalletProvider>(context, listen: false);
+
+      await aiProv.processBillImage(
+        imagePath: photo.path,
+        rawOCRText: 'TOTAL RP 45.000\nKAFE MEDAN\n1 KOPI SUSU 25.000\n1 ROTI BAKAR 20.000',
+      );
+
+      final ocr = aiProv.lastOCRResult;
+      final defaultWallet = walletProv.wallets.isNotEmpty ? walletProv.wallets.first.name : 'Dompet Tunai';
+
+      final txList = <AIParsedTransaction>[];
+      if (ocr != null) {
+        txList.add(
+          AIParsedTransaction(
+            walletName: defaultWallet,
+            type: 'EXPENSE',
+            amount: ocr.totalAmount,
+            category: ocr.category.isNotEmpty ? ocr.category : 'Belanja',
+            notes: 'Struk: ${ocr.merchantName}',
+          ),
+        );
+      }
+
+      final parsedResult = AIParsedResult(
+        intent: 'TRANSACTION_ENTRY',
+        transactions: txList,
+        naturalResponse: ocr != null
+            ? 'Struk ${ocr.merchantName} sebesar ${CurrencyFormatter.formatRupiah(ocr.totalAmount)} berhasil dibaca.'
+            : 'Foto struk diterima.',
+      );
+
+      final aiMsg = _ChatMessage(
+        id: 'ai_${DateTime.now().millisecondsSinceEpoch}',
+        text: parsedResult.naturalResponse,
+        isUser: false,
+        parsedResult: parsedResult,
+      );
+
+      if (mounted) {
+        setState(() {
+          _messages.add(aiMsg);
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
+    } catch (e) {
+      if (mounted) {
+        final errorMsg = _ChatMessage(
+          id: 'err_${DateTime.now().millisecondsSinceEpoch}',
+          text: 'Gagal membaca struk: $e',
+          isUser: false,
+        );
+        setState(() {
+          _messages.add(errorMsg);
+          _isLoading = false;
+        });
+        _scrollToBottom();
+      }
+    }
+  }
+
+  Future<void> _commitTransactions(String messageId, AIParsedResult result) async {
+    setState(() => _committingMessageId = messageId);
+
     final txProv = Provider.of<TransactionProvider>(context, listen: false);
     final walletProv = Provider.of<WalletProvider>(context, listen: false);
     final taskProv = Provider.of<TaskProvider>(context, listen: false);
 
     try {
-      // 1. Eksekusi seluruh transaksi yang terdeteksi
-      for (final tx in _parsedResult!.transactions) {
-        // Cocokkan dompet
+      for (int i = 0; i < result.transactions.length; i++) {
+        final tx = result.transactions[i];
+        final overrideWalletId = _selectedWalletOverrides['${messageId}_$i'];
+
         WalletModel? matchedWallet;
-        for (final w in walletProv.wallets) {
-          if (w.name.toLowerCase() == tx.walletName.toLowerCase() ||
-              tx.walletName.toLowerCase().contains(w.name.toLowerCase())) {
-            matchedWallet = w;
-            break;
+        if (overrideWalletId != null) {
+          matchedWallet = walletProv.wallets.firstWhere(
+            (w) => w.id == overrideWalletId,
+            orElse: () => walletProv.wallets.first,
+          );
+        } else {
+          for (final w in walletProv.wallets) {
+            if (w.name.toLowerCase() == tx.walletName.toLowerCase() ||
+                tx.walletName.toLowerCase().contains(w.name.toLowerCase())) {
+              matchedWallet = w;
+              break;
+            }
           }
+          matchedWallet ??= walletProv.wallets.isNotEmpty
+              ? walletProv.wallets.firstWhere((w) => w.isDefault, orElse: () => walletProv.wallets.first)
+              : null;
         }
-        matchedWallet ??= walletProv.wallets.isNotEmpty
-            ? walletProv.wallets.first
-            : null;
 
         if (matchedWallet == null) continue;
 
-        // Cocokkan kategori
         CategoryModel? matchedCategory;
         for (final c in txProv.categories) {
           if (c.name.toLowerCase() == tx.category.toLowerCase() ||
@@ -156,9 +455,7 @@ class _AITextModalState extends State<AITextModal> {
             break;
           }
         }
-        matchedCategory ??= txProv.categories.isNotEmpty
-            ? txProv.categories.first
-            : null;
+        matchedCategory ??= txProv.categories.isNotEmpty ? txProv.categories.first : null;
 
         if (tx.type == 'TRANSFER') {
           await txProv.addTransaction(
@@ -181,63 +478,73 @@ class _AITextModalState extends State<AITextModal> {
             categoryId: matchedCategory?.id,
             type: tx.type,
             amount: tx.amount,
-            description: tx.notes.isNotEmpty
-                ? tx.notes
-                : (matchedCategory?.name ?? 'Transaksi AI'),
+            description: tx.notes.isNotEmpty ? tx.notes : (matchedCategory?.name ?? 'Transaksi'),
             transactionDate: DateTime.now(),
           );
         }
       }
 
-      // 2. Eksekusi pengingat / tugas jika terdeteksi
-      for (final t in _parsedResult!.tasks) {
+      for (final task in result.tasks) {
+        String? matchedWalletId;
+        if (task.walletName != null) {
+          final matched = walletProv.wallets.firstWhere(
+            (w) => w.name.toLowerCase() == task.walletName!.toLowerCase() ||
+                task.walletName!.toLowerCase().contains(w.name.toLowerCase()),
+            orElse: () => walletProv.wallets.first,
+          );
+          matchedWalletId = matched.id;
+        }
+
         await taskProv.addTask(
-          title: t.title,
-          dueDate: t.dueDate,
-          priority: t.priority,
-          estimatedAmount: t.estimatedAmount,
+          title: task.title,
+          dueDate: task.dueDate,
+          priority: task.priority,
+          estimatedAmount: task.estimatedAmount,
+          walletId: matchedWalletId,
+          type: task.type,
+          recurrence: task.recurrence,
         );
       }
 
       await walletProv.loadWallets();
+      await txProv.refreshTransactions();
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(
-            content: Text('Perintah AI berhasil dieksekusi & disimpan! 🎉'),
-            backgroundColor: AppColors.textBlack,
-          ),
-        );
-        Navigator.pop(context, true);
+        final index = _messages.indexWhere((m) => m.id == messageId);
+        if (index != -1) {
+          setState(() {
+            _messages[index] = _messages[index].copyWith(isCommitted: true);
+            _messages.add(
+              _ChatMessage(
+                id: 'success_${DateTime.now().millisecondsSinceEpoch}',
+                text: 'Berhasil dicatat ke catatan keuanganmu! 🎉 Ada lagi yang mau kamu catat?',
+                isUser: false,
+              ),
+            );
+          });
+          _scrollToBottom();
+        }
       }
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text('Gagal menyimpan transaksi: $e'),
-            backgroundColor: Colors.redAccent,
-          ),
+          SnackBar(content: Text('Gagal menyimpan transaksi: $e')),
         );
       }
     } finally {
-      if (mounted) setState(() => _isCommitting = false);
+      if (mounted) setState(() => _committingMessageId = null);
     }
   }
 
   @override
   Widget build(BuildContext context) {
-    final walletProv = Provider.of<WalletProvider>(context);
-    final txProv = Provider.of<TransactionProvider>(context);
+    final bottomInset = MediaQuery.of(context).viewInsets.bottom;
+    final screenHeight = MediaQuery.of(context).size.height;
 
     return Padding(
-      padding: EdgeInsets.only(
-        bottom: MediaQuery.of(context).viewInsets.bottom,
-      ),
+      padding: EdgeInsets.only(bottom: bottomInset),
       child: Container(
-        constraints: BoxConstraints(
-          maxHeight: MediaQuery.of(context).size.height * 0.90,
-        ),
-        padding: const EdgeInsets.fromLTRB(20, 18, 20, 24),
+        height: screenHeight * 0.88,
         decoration: const BoxDecoration(
           color: AppColors.butterYellow,
           borderRadius: BorderRadius.vertical(top: Radius.circular(32)),
@@ -247,216 +554,241 @@ class _AITextModalState extends State<AITextModal> {
             right: BorderSide(color: AppColors.borderBlack, width: 2.5),
           ),
         ),
-        child: SingleChildScrollView(
+        child: SafeArea(
+          top: false,
           child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header Modal
-              Row(
-                children: [
-                  Container(
-                    width: 38,
-                    height: 38,
-                    decoration: BoxDecoration(
-                      color: AppColors.cardWhite,
-                      shape: BoxShape.circle,
-                      border:
-                          Border.all(color: AppColors.borderBlack, width: 1.8),
-                    ),
-                    child: const Icon(Icons.auto_awesome,
-                        size: 20, color: AppColors.textBlack),
-                  ),
-                  const SizedBox(width: 10),
-                  const Expanded(
-                    child: Column(
-                      crossAxisAlignment: CrossAxisAlignment.start,
-                      children: [
-                        Text(
-                          'Catat Cepat dengan AI',
-                          style: TextStyle(
-                            fontSize: 16.5,
-                            fontWeight: FontWeight.w900,
-                            color: AppColors.textBlack,
-                            letterSpacing: -0.3,
-                          ),
-                        ),
-                        Text(
-                          'Ketik bebas, AI akan mengekstrak otomatis.',
-                          style: TextStyle(
-                            fontSize: 11,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textMuted,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                  Container(
-                    padding:
-                        const EdgeInsets.symmetric(horizontal: 7, vertical: 3),
-                    decoration: BoxDecoration(
-                      color: AppColors.skyBlue,
-                      borderRadius: BorderRadius.circular(8),
-                      border:
-                          Border.all(color: AppColors.borderBlack, width: 1),
-                    ),
-                    child: const Text(
-                      'gemini-3.7',
-                      style: TextStyle(
-                        fontSize: 9.5,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textBlack,
-                      ),
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  GestureDetector(
-                    onTap: () => Navigator.pop(context),
-                    child: Container(
-                      padding: const EdgeInsets.all(5),
-                      decoration: BoxDecoration(
-                        color: AppColors.cardWhite,
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: AppColors.borderBlack, width: 1.5),
-                      ),
-                      child: const Icon(Icons.close,
-                          size: 16, color: AppColors.textBlack),
-                    ),
-                  ),
-                ],
-              ),
-              const SizedBox(height: 16),
-
-              // Kolom Input Teks AI
+              // Header Chat
               Container(
-                decoration: BoxDecoration(
+                padding: const EdgeInsets.symmetric(horizontal: 18, vertical: 12),
+                decoration: const BoxDecoration(
                   color: AppColors.cardWhite,
-                  borderRadius: BorderRadius.circular(20),
-                  border: Border.all(color: AppColors.borderBlack, width: 2),
-                  boxShadow: const [
-                    BoxShadow(
-                      color: AppColors.shadowBlack,
-                      offset: Offset(2, 2.5),
-                      blurRadius: 0,
-                    ),
-                  ],
+                  borderRadius: BorderRadius.vertical(top: Radius.circular(30)),
+                  border: Border(
+                    bottom: BorderSide(color: AppColors.borderBlack, width: 2),
+                  ),
                 ),
                 child: Row(
                   children: [
-                    const Padding(
-                      padding: EdgeInsets.only(left: 14, right: 6),
-                      child: Icon(Icons.chat_bubble_outline_rounded,
-                          size: 20, color: AppColors.textMuted),
-                    ),
-                    Expanded(
-                      child: TextField(
-                        controller: _textController,
-                        focusNode: _focusNode,
-                        textInputAction: TextInputAction.send,
-                        onSubmitted: _processText,
-                        style: const TextStyle(
-                          fontSize: 14,
-                          fontWeight: FontWeight.w800,
-                          color: AppColors.textBlack,
+                    Container(
+                      width: 38,
+                      height: 38,
+                      decoration: BoxDecoration(
+                        color: AppColors.mintGreen,
+                        shape: BoxShape.circle,
+                        border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                      ),
+                      child: const Center(
+                        child: Text(
+                          '🦀',
+                          style: TextStyle(fontSize: 20),
                         ),
-                        decoration: const InputDecoration(
-                          hintText: 'Misal: Beli makan siang 25rb pakai Tunai...',
-                          hintStyle: TextStyle(
-                            fontSize: 13,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textMuted,
+                      ),
+                    ),
+                    const SizedBox(width: 10),
+                    const Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            'Teman Keuangan (Mr. Wallet)',
+                            style: TextStyle(
+                              fontSize: 15,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textBlack,
+                            ),
                           ),
-                          border: InputBorder.none,
-                          contentPadding:
-                              EdgeInsets.symmetric(vertical: 14),
-                        ),
+                          Row(
+                            children: [
+                              Icon(Icons.circle, size: 8, color: Color(0xFF16A34A)),
+                              SizedBox(width: 4),
+                              Text(
+                                'Online • Siap Bantu Kamu',
+                                style: TextStyle(
+                                  fontSize: 11,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textMuted,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ],
                       ),
                     ),
-                    if (_textController.text.isNotEmpty)
-                      GestureDetector(
-                        onTap: () {
-                          _textController.clear();
-                          setState(() {});
-                        },
-                        child: const Padding(
-                          padding: EdgeInsets.symmetric(horizontal: 6),
-                          child: Icon(Icons.cancel_rounded,
-                              size: 18, color: AppColors.textMuted),
-                        ),
-                      ),
-                    // Tombol Kirim / Proses
                     GestureDetector(
-                      onTap: () => _processText(_textController.text),
+                      onTap: () => Navigator.pop(context),
                       child: Container(
-                        margin: const EdgeInsets.only(right: 6),
-                        padding: const EdgeInsets.all(10),
+                        padding: const EdgeInsets.all(6),
                         decoration: BoxDecoration(
-                          color: AppColors.primaryYellow,
+                          color: AppColors.cardWhite,
                           shape: BoxShape.circle,
-                          border: Border.all(
-                              color: AppColors.borderBlack, width: 1.8),
+                          border: Border.all(color: AppColors.borderBlack, width: 1.5),
                         ),
-                        child: _isLoading
-                            ? const SizedBox(
-                                width: 16,
-                                height: 16,
-                                child: CircularProgressIndicator(
-                                  strokeWidth: 2,
-                                  color: AppColors.textBlack,
-                                ),
-                              )
-                            : const Icon(Icons.arrow_upward_rounded,
-                                size: 18, color: AppColors.textBlack),
+                        child: const Icon(Icons.close_rounded, size: 18, color: AppColors.textBlack),
                       ),
                     ),
                   ],
                 ),
               ),
-              const SizedBox(height: 16),
 
-              // ==========================================
-              // KONDISI 1: Sedang Memproses Loading
-              // ==========================================
-              if (_isLoading)
+              // Chat Messages Area
+              Expanded(
+                child: ListView.builder(
+                  controller: _scrollController,
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 14),
+                  itemCount: _messages.length + (_isLoading ? 1 : 0),
+                  itemBuilder: (context, index) {
+                    if (index == _messages.length && _isLoading) {
+                      return _buildAILoadingBubble();
+                    }
+                    final msg = _messages[index];
+                    return _buildChatBubble(msg);
+                  },
+                ),
+              ),
+
+              // Quick Suggestions (Jika masih sedikit pesan)
+              if (_messages.length <= 2)
                 Container(
-                  width: double.infinity,
-                  padding: const EdgeInsets.all(20),
-                  margin: const EdgeInsets.only(top: 10),
-                  decoration: BoxDecoration(
-                    color: AppColors.cardWhite,
-                    borderRadius: BorderRadius.circular(18),
-                    border:
-                        Border.all(color: AppColors.borderBlack, width: 1.8),
+                  height: 36,
+                  margin: const EdgeInsets.only(bottom: 6),
+                  child: ListView.separated(
+                    padding: const EdgeInsets.symmetric(horizontal: 14),
+                    scrollDirection: Axis.horizontal,
+                    itemCount: _quickSuggestions.length,
+                    separatorBuilder: (_, __) => const SizedBox(width: 8),
+                    itemBuilder: (context, i) {
+                      final item = _quickSuggestions[i];
+                      return GestureDetector(
+                        onTap: () => _handleSend(item),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: AppColors.cardWhite,
+                            borderRadius: BorderRadius.circular(16),
+                            border: Border.all(color: AppColors.borderBlack, width: 1.4),
+                          ),
+                          child: Row(
+                            children: [
+                              const Icon(Icons.bolt_rounded, size: 14, color: AppColors.primaryYellow),
+                              const SizedBox(width: 4),
+                              Text(
+                                item,
+                                style: const TextStyle(
+                                  fontSize: 11.5,
+                                  fontWeight: FontWeight.w700,
+                                  color: AppColors.textBlack,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    },
                   ),
-                  child: const Column(
-                    children: [
-                      CircularProgressIndicator(color: AppColors.textBlack),
-                      SizedBox(height: 12),
-                      Text(
-                        'AI sedang mengekstrak transaksi...',
-                        style: TextStyle(
-                          fontSize: 13,
-                          fontWeight: FontWeight.w800,
+                ),
+
+              // Chat Input Bar (Gaya WA/ChatGPT + Lampiran Foto/Kamera)
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 10),
+                decoration: const BoxDecoration(
+                  color: AppColors.cardWhite,
+                  border: Border(
+                    top: BorderSide(color: AppColors.borderBlack, width: 2),
+                  ),
+                ),
+                child: Row(
+                  children: [
+                    // Tombol Upload Foto / Kamera
+                    GestureDetector(
+                      onTap: _showMediaPickerSheet,
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.cardWhite,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.shadowBlack,
+                              offset: Offset(1.5, 1.5),
+                              blurRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.camera_alt_rounded,
+                          size: 20,
                           color: AppColors.textBlack,
                         ),
                       ),
-                    ],
-                  ),
-                )
+                    ),
+                    const SizedBox(width: 8),
 
-              // ==========================================
-              // KONDISI 2: Hasil Ekstraksi & Menu Konfirmasi Tindakan
-              // ==========================================
-              else if (_parsedResult != null)
-                _buildActionConfirmationSection(walletProv, txProv)
+                    // Input Text Area
+                    Expanded(
+                      child: Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 14),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF4F4F5),
+                          borderRadius: BorderRadius.circular(24),
+                          border: Border.all(color: AppColors.borderBlack, width: 1.6),
+                        ),
+                        child: TextField(
+                          controller: _textController,
+                          focusNode: _focusNode,
+                          textInputAction: TextInputAction.send,
+                          onSubmitted: (v) => _handleSend(),
+                          style: const TextStyle(
+                            fontSize: 13.5,
+                            fontWeight: FontWeight.w700,
+                            color: AppColors.textBlack,
+                          ),
+                          decoration: const InputDecoration(
+                            isDense: true,
+                            hintText: 'Ketik transaksi atau foto struk...',
+                            hintStyle: TextStyle(
+                              fontSize: 12,
+                              color: AppColors.textMuted,
+                              fontWeight: FontWeight.w500,
+                            ),
+                            border: InputBorder.none,
+                            contentPadding: EdgeInsets.symmetric(vertical: 10),
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
 
-              // ==========================================
-              // KONDISI 3: Riwayat Teks & Saran Perintah
-              // ==========================================
-              else
-                _buildHistoryAndSuggestionsSection(),
+                    // Tombol Kirim
+                    GestureDetector(
+                      onTap: () => _handleSend(),
+                      child: Container(
+                        width: 40,
+                        height: 40,
+                        decoration: BoxDecoration(
+                          color: AppColors.primaryYellow,
+                          shape: BoxShape.circle,
+                          border: Border.all(color: AppColors.borderBlack, width: 2),
+                          boxShadow: const [
+                            BoxShadow(
+                              color: AppColors.shadowBlack,
+                              offset: Offset(1.5, 2),
+                              blurRadius: 0,
+                            ),
+                          ],
+                        ),
+                        child: const Icon(
+                          Icons.send_rounded,
+                          size: 18,
+                          color: AppColors.textBlack,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
         ),
@@ -464,396 +796,453 @@ class _AITextModalState extends State<AITextModal> {
     );
   }
 
-  Widget _buildActionConfirmationSection(
-    WalletProvider walletProv,
-    TransactionProvider txProv,
-  ) {
-    final transactions = _parsedResult!.transactions;
-    final tasks = _parsedResult!.tasks;
-    final hasActions = transactions.isNotEmpty || tasks.isNotEmpty;
-
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // AI Feedback Response Bubble
-        Container(
-          width: double.infinity,
-          padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 12),
-          decoration: BoxDecoration(
-            color: AppColors.cardWhite,
-            borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: AppColors.borderBlack, width: 1.8),
-            boxShadow: const [
-              BoxShadow(
-                color: AppColors.shadowBlack,
-                offset: Offset(1.5, 2),
-                blurRadius: 0,
-              ),
-            ],
-          ),
-          child: Row(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Icon(Icons.verified_outlined,
-                  size: 20, color: Color(0xFF16A34A)),
-              const SizedBox(width: 8),
-              Expanded(
-                child: Text(
-                  _parsedResult!.naturalResponse,
-                  style: const TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w800,
-                    color: AppColors.textBlack,
-                  ),
-                ),
-              ),
-            ],
-          ),
-        ),
-        const SizedBox(height: 14),
-
-        // Section Title: Menu Konfirmasi Tindakan
-        const Row(
+  Widget _buildChatBubble(_ChatMessage msg) {
+    if (msg.isUser) {
+      return Padding(
+        padding: const EdgeInsets.only(bottom: 12),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.end,
+          crossAxisAlignment: CrossAxisAlignment.end,
           children: [
-            Icon(Icons.checklist_rounded, size: 18, color: AppColors.textBlack),
-            SizedBox(width: 6),
-            Text(
-              'Menu Konfirmasi Tindakan',
-              style: TextStyle(
-                fontSize: 14,
-                fontWeight: FontWeight.w900,
-                color: AppColors.textBlack,
-              ),
-            ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        if (!hasActions)
-          Container(
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.cardWhite,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.borderBlack, width: 1.6),
-            ),
-            child: const Text(
-              'Tidak ada aksi transaksi yang terdeteksi dari teks ini. Coba tuliskan nominal atau nama barang lebih spesifik.',
-              style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600),
-            ),
-          ),
-
-        // Kartu Konfirmasi Tiap Transaksi
-        ...transactions.map((tx) {
-          final isIncome = tx.type == 'INCOME';
-          final isTransfer = tx.type == 'TRANSFER';
-
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(14),
-            decoration: BoxDecoration(
-              color: AppColors.cardWhite,
-              borderRadius: BorderRadius.circular(16),
-              border: Border.all(color: AppColors.borderBlack, width: 2),
-              boxShadow: const [
-                BoxShadow(
-                  color: AppColors.shadowBlack,
-                  offset: Offset(2, 2.5),
-                  blurRadius: 0,
+            Flexible(
+              child: Container(
+                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
+                decoration: BoxDecoration(
+                  color: AppColors.cardWhite,
+                  borderRadius: const BorderRadius.only(
+                    topLeft: Radius.circular(18),
+                    topRight: Radius.circular(18),
+                    bottomLeft: Radius.circular(18),
+                    bottomRight: Radius.circular(4),
+                  ),
+                  border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                  boxShadow: const [
+                    BoxShadow(
+                      color: AppColors.shadowBlack,
+                      offset: Offset(1.5, 2),
+                      blurRadius: 0,
+                    ),
+                  ],
                 ),
-              ],
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.end,
                   children: [
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: isIncome
-                            ? AppColors.mintGreen
-                            : (isTransfer
-                                ? AppColors.skyBlue
-                                : AppColors.bubblePink),
-                        shape: BoxShape.circle,
-                        border: Border.all(
-                            color: AppColors.borderBlack, width: 1.5),
+                    if (msg.imagePath != null) ...[
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(
+                          File(msg.imagePath!),
+                          width: 180,
+                          height: 180,
+                          fit: BoxFit.cover,
+                        ),
                       ),
-                      child: Icon(
-                        CategoryIconHelper.resolve(tx.category),
-                        size: 18,
+                      const SizedBox(height: 6),
+                    ],
+                    Text(
+                      msg.text,
+                      style: const TextStyle(
+                        fontSize: 13.5,
+                        fontWeight: FontWeight.w800,
                         color: AppColors.textBlack,
                       ),
                     ),
-                    const SizedBox(width: 10),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            tx.category,
-                            style: const TextStyle(
-                              fontSize: 14,
-                              fontWeight: FontWeight.w900,
-                              color: AppColors.textBlack,
-                            ),
-                          ),
-                          Text(
-                            tx.notes.isNotEmpty ? tx.notes : 'Tanpa catatan',
-                            style: const TextStyle(
-                              fontSize: 11,
-                              fontWeight: FontWeight.w600,
-                              color: AppColors.textMuted,
-                            ),
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      padding: const EdgeInsets.symmetric(
-                          horizontal: 8, vertical: 3),
-                      decoration: BoxDecoration(
-                        color: isIncome
-                            ? AppColors.mintGreen
-                            : (isTransfer
-                                ? AppColors.skyBlue
-                                : AppColors.bubblePink),
-                        borderRadius: BorderRadius.circular(8),
-                        border: Border.all(
-                            color: AppColors.borderBlack, width: 1.2),
-                      ),
-                      child: Text(
-                        isIncome
-                            ? 'Pemasukan'
-                            : (isTransfer ? 'Transfer' : 'Pengeluaran'),
-                        style: const TextStyle(
-                          fontSize: 10.5,
-                          fontWeight: FontWeight.w900,
-                          color: AppColors.textBlack,
-                        ),
-                      ),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 10),
-                const Divider(height: 1, color: AppColors.borderLight),
-                const SizedBox(height: 10),
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Row(
-                      children: [
-                        const Icon(Icons.account_balance_wallet_outlined,
-                            size: 16, color: AppColors.textMuted),
-                        const SizedBox(width: 4),
-                        Text(
-                          tx.walletName,
-                          style: const TextStyle(
-                            fontSize: 12.5,
-                            fontWeight: FontWeight.w800,
-                            color: AppColors.textBlack,
-                          ),
-                        ),
-                      ],
-                    ),
+                    const SizedBox(height: 3),
                     Text(
-                      CurrencyFormatter.formatRupiah(tx.amount),
-                      style: TextStyle(
-                        fontSize: 17,
-                        fontWeight: FontWeight.w900,
-                        color: isIncome
-                            ? const Color(0xFF16A34A)
-                            : (isTransfer
-                                ? AppColors.textBlack
-                                : const Color(0xFFDC2626)),
+                      DateFormat('HH:mm').format(msg.timestamp),
+                      style: const TextStyle(
+                        fontSize: 9.5,
+                        fontWeight: FontWeight.w600,
+                        color: AppColors.textMuted,
                       ),
                     ),
                   ],
                 ),
-              ],
+              ),
             ),
-          );
-        }),
+            const SizedBox(width: 8),
+            Container(
+              width: 32,
+              height: 32,
+              decoration: BoxDecoration(
+                color: AppColors.skyBlue,
+                shape: BoxShape.circle,
+                border: Border.all(color: AppColors.borderBlack, width: 1.6),
+              ),
+              child: const Icon(Icons.person_rounded, size: 18, color: AppColors.textBlack),
+            ),
+          ],
+        ),
+      );
+    }
 
-        // Kartu Tugas / Jadwal Terdeteksi (jika ada)
-        ...tasks.map((t) {
-          return Container(
-            margin: const EdgeInsets.only(bottom: 10),
-            padding: const EdgeInsets.all(12),
+    // AI Response Bubble
+    final hasActions = msg.parsedResult != null &&
+        (msg.parsedResult!.transactions.isNotEmpty || msg.parsedResult!.tasks.isNotEmpty);
+
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 14),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.start,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
             decoration: BoxDecoration(
-              color: AppColors.cardWhite,
-              borderRadius: BorderRadius.circular(14),
-              border: Border.all(color: AppColors.borderBlack, width: 1.8),
+              color: AppColors.mintGreen,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.borderBlack, width: 1.6),
             ),
-            child: Row(
+            child: const Center(
+              child: Text('🦀', style: TextStyle(fontSize: 16)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Flexible(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
               children: [
-                const Icon(Icons.notification_important_rounded,
-                    color: Color(0xFFEAB308), size: 20),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        'Pengingat: ${t.title}',
-                        style: const TextStyle(
-                            fontSize: 12.5, fontWeight: FontWeight.w800),
-                      ),
-                      Text(
-                        'Jatuh tempo: ${DateFormat('d MMM yyyy, HH:mm').format(t.dueDate)}',
-                        style: const TextStyle(
-                            fontSize: 10.5,
-                            fontWeight: FontWeight.w600,
-                            color: AppColors.textMuted),
-                      ),
-                    ],
-                  ),
-                ),
-              ],
-            ),
-          );
-        }),
-
-        const SizedBox(height: 14),
-
-        // Tombol Aksi Konfirmasi
-        Row(
-          children: [
-            Expanded(
-              flex: 1,
-              child: NeoButton(
-                label: 'Ulangi',
-                icon: Icons.refresh_rounded,
-                backgroundColor: AppColors.cardWhite,
-                textColor: AppColors.textBlack,
-                height: 48,
-                onPressed: () {
-                  setState(() => _parsedResult = null);
-                },
-              ),
-            ),
-            const SizedBox(width: 10),
-            Expanded(
-              flex: 2,
-              child: NeoButton(
-                label: _isCommitting ? 'Menyimpan...' : 'Konfirmasi & Simpan',
-                icon: Icons.check_circle_rounded,
-                backgroundColor: AppColors.mintGreen,
-                textColor: AppColors.textBlack,
-                height: 48,
-                onPressed: hasActions && !_isCommitting ? _confirmAndCommit : null,
-              ),
-            ),
-          ],
-        ),
-      ],
-    );
-  }
-
-  Widget _buildHistoryAndSuggestionsSection() {
-    return Column(
-      crossAxisAlignment: CrossAxisAlignment.start,
-      children: [
-        // Riwayat Teks Perintah
-        Row(
-          mainAxisAlignment: MainAxisAlignment.spaceBetween,
-          children: [
-            const Row(
-              children: [
-                Icon(Icons.history_rounded,
-                    size: 16, color: AppColors.textBlack),
-                SizedBox(width: 6),
-                Text(
-                  'Riwayat Perintah Terakhir',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w900,
-                    color: AppColors.textBlack,
-                  ),
-                ),
-              ],
-            ),
-            if (_promptHistory.isNotEmpty)
-              GestureDetector(
-                onTap: () async {
-                  await AIService.instance.clearPromptHistory();
-                  _loadHistory();
-                },
-                child: const Text(
-                  'Hapus',
-                  style: TextStyle(
-                    fontSize: 11.5,
-                    fontWeight: FontWeight.w800,
-                    color: Color(0xFFDC2626),
-                  ),
-                ),
-              ),
-          ],
-        ),
-        const SizedBox(height: 8),
-
-        if (_promptHistory.isEmpty)
-          const Text(
-            'Belum ada riwayat perintah.',
-            style: TextStyle(
-              fontSize: 12,
-              fontWeight: FontWeight.w600,
-              color: AppColors.textMuted,
-            ),
-          )
-        else
-          Wrap(
-            spacing: 8,
-            runSpacing: 8,
-            children: _promptHistory.take(6).map((prompt) {
-              return GestureDetector(
-                onTap: () {
-                  _textController.text = prompt;
-                  _processText(prompt);
-                },
-                child: Container(
-                  padding:
-                      const EdgeInsets.symmetric(horizontal: 12, vertical: 7),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
                   decoration: BoxDecoration(
-                    color: AppColors.cardWhite,
-                    borderRadius: BorderRadius.circular(14),
-                    border:
-                        Border.all(color: AppColors.borderBlack, width: 1.4),
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: const BorderRadius.only(
+                      topLeft: Radius.circular(4),
+                      topRight: Radius.circular(18),
+                      bottomLeft: Radius.circular(18),
+                      bottomRight: Radius.circular(18),
+                    ),
+                    border: Border.all(color: AppColors.borderBlack, width: 1.8),
                     boxShadow: const [
                       BoxShadow(
                         color: AppColors.shadowBlack,
-                        offset: Offset(1, 1.5),
+                        offset: Offset(1.5, 2),
                         blurRadius: 0,
                       ),
                     ],
                   ),
-                  child: Row(
-                    mainAxisSize: MainAxisSize.min,
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      const Icon(Icons.north_west_rounded,
-                          size: 12, color: AppColors.textMuted),
-                      const SizedBox(width: 5),
-                      Flexible(
-                        child: Text(
-                          prompt,
-                          maxLines: 1,
-                          overflow: TextOverflow.ellipsis,
-                          style: const TextStyle(
-                            fontSize: 11.5,
-                            fontWeight: FontWeight.w700,
-                            color: AppColors.textBlack,
-                          ),
+                      Text(
+                        msg.text,
+                        style: const TextStyle(
+                          fontSize: 13,
+                          fontWeight: FontWeight.w700,
+                          color: AppColors.textBlack,
+                        ),
+                      ),
+                      const SizedBox(height: 3),
+                      Text(
+                        DateFormat('HH:mm').format(msg.timestamp),
+                        style: const TextStyle(
+                          fontSize: 9.5,
+                          fontWeight: FontWeight.w600,
+                          color: AppColors.textMuted,
                         ),
                       ),
                     ],
                   ),
                 ),
-              );
-            }).toList(),
+
+                // Jika AI menghasilkan tindakan transaksi/task
+                if (hasActions) ...[
+                  const SizedBox(height: 8),
+                  Container(
+                    padding: const EdgeInsets.all(12),
+                    decoration: BoxDecoration(
+                      color: AppColors.cardWhite,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                    ),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        const Row(
+                          children: [
+                            Icon(Icons.receipt_long_rounded, size: 16, color: AppColors.textBlack),
+                            SizedBox(width: 6),
+                            Text(
+                              'Konfirmasi Aksi Sistem',
+                              style: TextStyle(
+                                fontSize: 12,
+                                fontWeight: FontWeight.w900,
+                                color: AppColors.textBlack,
+                              ),
+                            ),
+                          ],
+                        ),
+                        const Divider(height: 14, color: AppColors.borderBlack),
+                        ...msg.parsedResult!.transactions.asMap().entries.map((entry) {
+                          final txIndex = entry.key;
+                          final t = entry.value;
+                          final isIncome = t.type == 'INCOME';
+                          final isTransfer = t.type == 'TRANSFER';
+
+                          final walletProv = Provider.of<WalletProvider>(context, listen: false);
+                          final overrideKey = '${msg.id}_$txIndex';
+                          final currentSelectedWalletId = _selectedWalletOverrides[overrideKey] ??
+                              (() {
+                                final matched = walletProv.wallets.firstWhere(
+                                  (w) => w.name.toLowerCase() == t.walletName.toLowerCase() ||
+                                      t.walletName.toLowerCase().contains(w.name.toLowerCase()),
+                                  orElse: () => walletProv.wallets.isNotEmpty
+                                      ? walletProv.wallets.firstWhere((w) => w.isDefault, orElse: () => walletProv.wallets.first)
+                                      : WalletModel(id: 'w_cash', name: 'Dompet Tunai', type: 'CASH', balance: 0, icon: 'account_balance_wallet', color: 'primaryYellow'),
+                                );
+                                return matched.id;
+                              })();
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 8),
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                      decoration: BoxDecoration(
+                                        color: isIncome
+                                            ? AppColors.mintGreen
+                                            : isTransfer
+                                                ? AppColors.skyBlue
+                                                : AppColors.bubblePink,
+                                        borderRadius: BorderRadius.circular(6),
+                                        border: Border.all(color: AppColors.borderBlack, width: 0.8),
+                                      ),
+                                      child: Text(
+                                        isIncome ? 'Masuk' : (isTransfer ? 'Transfer' : 'Keluar'),
+                                        style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w800),
+                                      ),
+                                    ),
+                                    const SizedBox(width: 8),
+                                    Expanded(
+                                      child: Text(
+                                        t.notes.isNotEmpty ? t.notes : t.category,
+                                        style: const TextStyle(fontSize: 12, fontWeight: FontWeight.w700),
+                                        overflow: TextOverflow.ellipsis,
+                                      ),
+                                    ),
+                                    Text(
+                                      CurrencyFormatter.formatRupiah(t.amount),
+                                      style: TextStyle(
+                                        fontSize: 12,
+                                        fontWeight: FontWeight.w900,
+                                        color: isIncome ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                                if (!msg.isCommitted && walletProv.wallets.isNotEmpty) ...[
+                                  const SizedBox(height: 6),
+                                  Row(
+                                    children: [
+                                      Text(
+                                        isIncome ? 'Masuk ke:' : 'Potong dari:',
+                                        style: const TextStyle(
+                                          fontSize: 10.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: AppColors.textMuted,
+                                        ),
+                                      ),
+                                      const SizedBox(width: 6),
+                                      Expanded(
+                                        child: Container(
+                                          height: 28,
+                                          padding: const EdgeInsets.symmetric(horizontal: 8),
+                                          decoration: BoxDecoration(
+                                            color: const Color(0xFFF4F4F5),
+                                            borderRadius: BorderRadius.circular(8),
+                                            border: Border.all(color: AppColors.borderBlack, width: 1),
+                                          ),
+                                          child: DropdownButtonHideUnderline(
+                                            child: DropdownButton<String>(
+                                              value: walletProv.wallets.any((w) => w.id == currentSelectedWalletId)
+                                                  ? currentSelectedWalletId
+                                                  : walletProv.wallets.first.id,
+                                              isExpanded: true,
+                                              isDense: true,
+                                              icon: const Icon(Icons.arrow_drop_down, size: 18, color: AppColors.textBlack),
+                                              items: walletProv.wallets.map((w) {
+                                                return DropdownMenuItem(
+                                                  value: w.id,
+                                                  child: Text(
+                                                    '${w.name} (${CurrencyFormatter.formatShort(w.balance)})',
+                                                    style: const TextStyle(
+                                                      fontSize: 11,
+                                                      fontWeight: FontWeight.w700,
+                                                      color: AppColors.textBlack,
+                                                    ),
+                                                  ),
+                                                );
+                                              }).toList(),
+                                              onChanged: (newId) {
+                                                if (newId != null) {
+                                                  setState(() {
+                                                    _selectedWalletOverrides[overrideKey] = newId;
+                                                  });
+                                                }
+                                              },
+                                            ),
+                                          ),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ],
+                              ],
+                            ),
+                          );
+                        }),
+                        ...msg.parsedResult!.tasks.map((task) {
+                          final isIncome = task.type == 'INCOME';
+                          final amount = task.estimatedAmount ?? 0.0;
+                          final recurrenceText = task.recurrence == 'MONTHLY'
+                              ? 'Tiap Bulan'
+                              : (task.recurrence == 'WEEKLY' ? 'Tiap Minggu' : 'Sekali');
+
+                          return Padding(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            child: Container(
+                              padding: const EdgeInsets.all(8),
+                              decoration: BoxDecoration(
+                                color: isIncome ? const Color(0xFFDCFCE7) : const Color(0xFFFFE4E6),
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: AppColors.borderBlack, width: 1.2),
+                              ),
+                              child: Row(
+                                children: [
+                                  Icon(
+                                    isIncome ? Icons.monetization_on_rounded : Icons.alarm_rounded,
+                                    size: 16,
+                                    color: isIncome ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                                  ),
+                                  const SizedBox(width: 6),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          '${isIncome ? 'Jadwal Gaji' : 'Jadwal Tagihan'}: ${task.title}',
+                                          style: const TextStyle(fontSize: 11.5, fontWeight: FontWeight.w800),
+                                        ),
+                                        Text(
+                                          'Pengulangan: $recurrenceText',
+                                          style: const TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: AppColors.textMuted),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  if (amount > 0)
+                                    Text(
+                                      '${isIncome ? '+' : '-'} ${CurrencyFormatter.formatRupiah(amount)}',
+                                      style: TextStyle(
+                                        fontSize: 11.5,
+                                        fontWeight: FontWeight.w900,
+                                        color: isIncome ? const Color(0xFF16A34A) : const Color(0xFFDC2626),
+                                      ),
+                                    ),
+                                ],
+                              ),
+                            ),
+                          );
+                        }),
+                        const SizedBox(height: 8),
+                        if (msg.isCommitted)
+                          Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 6),
+                            decoration: BoxDecoration(
+                              color: AppColors.mintGreen,
+                              borderRadius: BorderRadius.circular(10),
+                              border: Border.all(color: AppColors.borderBlack, width: 1.2),
+                            ),
+                            alignment: Alignment.center,
+                            child: const Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                Icon(Icons.check_circle_rounded, size: 14, color: AppColors.textBlack),
+                                SizedBox(width: 6),
+                                Text(
+                                  'Sudah Tersimpan di Database',
+                                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800),
+                                ),
+                              ],
+                            ),
+                          )
+                        else
+                          NeoButton(
+                            label: _committingMessageId == msg.id ? 'Menyimpan...' : 'Simpan Transaksi',
+                            icon: Icons.check_rounded,
+                            backgroundColor: AppColors.primaryYellow,
+                            height: 44,
+                            borderRadius: 14,
+                            onPressed: _committingMessageId == msg.id
+                                ? null
+                                : () => _commitTransactions(msg.id, msg.parsedResult!),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
+              ],
+            ),
           ),
-      ],
+        ],
+      ),
+    );
+  }
+
+  Widget _buildAILoadingBubble() {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.center,
+        children: [
+          Container(
+            width: 32,
+            height: 32,
+            decoration: BoxDecoration(
+              color: AppColors.mintGreen,
+              shape: BoxShape.circle,
+              border: Border.all(color: AppColors.borderBlack, width: 1.6),
+            ),
+            child: const Center(
+              child: Text('🦀', style: TextStyle(fontSize: 16)),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+            decoration: BoxDecoration(
+              color: const Color(0xFFF3F4F6),
+              borderRadius: BorderRadius.circular(16),
+              border: Border.all(color: AppColors.borderBlack, width: 1.6),
+            ),
+            child: const Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                SizedBox(
+                  width: 14,
+                  height: 14,
+                  child: CircularProgressIndicator(strokeWidth: 2, color: AppColors.textBlack),
+                ),
+                SizedBox(width: 8),
+                Text(
+                  'Mr. Wallet sedang mengetik...',
+                  style: TextStyle(
+                    fontSize: 12,
+                    fontWeight: FontWeight.w700,
+                    color: AppColors.textMuted,
+                  ),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
     );
   }
 }

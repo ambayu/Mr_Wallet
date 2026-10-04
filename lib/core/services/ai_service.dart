@@ -9,7 +9,7 @@ import '../../data/models/ai_parsed_result.dart';
 class AIService {
   static final AIService instance = AIService._internal();
 
-  static const String _defaultApiKey = 'sk-d9a53722e4cfce0d-3eb5kj-a74dc4a8';
+  static const String _defaultApiKey = 'sk-bb1927a4e6f77be2-ldfio2-a8ba33eb';
   static const String _defaultBaseUrl = 'https://route9.nurset-studio.web.id/v1';
   static const String _defaultModel = 'gemini-3.7-3.8';
   static const String _prefApiKey = 'gemini_api_key';
@@ -45,7 +45,13 @@ class AIService {
 
   Future<String> getApiKey() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_prefApiKey) ?? _defaultApiKey;
+    final storedKey = prefs.getString(_prefApiKey);
+    // Selalu pastikan key baru yang valid digunakan jika masih null atau key lama
+    if (storedKey == null || storedKey.isEmpty || storedKey.startsWith('sk-d9a53722')) {
+      await prefs.setString(_prefApiKey, _defaultApiKey);
+      return _defaultApiKey;
+    }
+    return storedKey;
   }
 
   Future<void> setApiKey(String apiKey) async {
@@ -56,7 +62,12 @@ class AIService {
 
   Future<String> getBaseUrl() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_prefBaseUrl) ?? _defaultBaseUrl;
+    final storedUrl = prefs.getString(_prefBaseUrl);
+    if (storedUrl == null || storedUrl.isEmpty) {
+      await prefs.setString(_prefBaseUrl, _defaultBaseUrl);
+      return _defaultBaseUrl;
+    }
+    return storedUrl;
   }
 
   Future<void> setBaseUrl(String url) async {
@@ -66,7 +77,12 @@ class AIService {
 
   Future<String> getModel() async {
     final prefs = await SharedPreferences.getInstance();
-    return prefs.getString(_prefModel) ?? _defaultModel;
+    final storedModel = prefs.getString(_prefModel);
+    if (storedModel == null || storedModel.isEmpty || storedModel == 'gpt-5.4') {
+      await prefs.setString(_prefModel, _defaultModel);
+      return _defaultModel;
+    }
+    return storedModel;
   }
 
   Future<void> setModel(String model) async {
@@ -137,8 +153,18 @@ class AIService {
       return _parseOfflineHeuristic(userInput, availableWallets, availableCategories);
     }
 
+    final clean = userInput.trim();
+    if (clean.isEmpty) {
+      return AIParsedResult(
+        intent: 'CHAT',
+        transactions: [],
+        tasks: [],
+        naturalResponse: 'Halo! Ada yang bisa Mr. Wallet bantu catat hari ini? 🦀💰',
+      );
+    }
+
     // Simpan ke riwayat teks
-    await addPromptHistory(trimmed);
+    await addPromptHistory(clean);
 
     final apiKey = await getApiKey();
     final baseUrl = await getBaseUrl();
@@ -147,25 +173,34 @@ class AIService {
     if (apiKey.isNotEmpty) {
       try {
         final systemPrompt = '''
-Anda adalah AI Asisten Keuangan cerdas untuk aplikasi Mr. Wallet (SmartFlow). Analisis instruksi pengguna dalam Bahasa Indonesia dan ekstrak seluruh tindakan keuangan menjadi format JSON strictly valid tanpa markdown tambahan.
+Anda adalah Mr. Wallet, maskot kepiting cerdas dan pecinta uang (seperti Tuan Krabs yang bijak & protektif terhadap tabungan) di aplikasi Mr. Wallet (SmartFlow). Anda gemar melihat uang bertambah (cuan/pemasukan), protektif terhadap uang keluar (mengomel lucu atau mengingatkan jika boros), dan senang menghitung koin/saldo. Analisis pesan pengguna dalam Bahasa Indonesia dan kembalikan respon dalam format JSON strictly valid tanpa markdown tambahan.
 
 Daftar Akun Dompet Tersedia: ${availableWallets.join(', ')}
 Daftar Kategori Tersedia: ${availableCategories.join(', ')}
 Waktu Sekarang: ${DateTime.now().toIso8601String()}
 
-Aturan Ekstraksi:
-1. Cocokkan dompet ke daftar akun dompet terdekat. Jika tidak disebutkan, default gunakan dompet pertama ("${availableWallets.isNotEmpty ? availableWallets.first : 'Dompet Tunai'}").
-2. Cocokkan kategori ke daftar kategori terdekat (misal: "nasi goreng" -> "Makan", "pertamax" -> "Bensin", "gajian" -> "Gaji").
-3. Deteksi tipe transaksi:
-   - "EXPENSE" untuk pengeluaran / bayar / beli
-   - "INCOME" untuk pendapatan / terima uang / gaji / bonus
-   - "TRANSFER" untuk transfer antar rekening
-   - "ADJUSTMENT" untuk penyesuaian saldo / uang hilang
-4. Kembalikan JSON persis sesuai skema di bawah ini.
+Aturan Persona & Ekstraksi:
+1. Jika pengguna menyapa, bercanda, bertanya siapa namamu, atau mengobrol santai:
+   - "intent": "CHAT"
+   - Kosongkan "transactions" dan "tasks" (array kosong []).
+   - "natural_response": Jawab dengan karakter Mr. Wallet si kepiting pecinta uang yang asyik, ramah, dan tanyakan apakah ada uang masuk atau transaksi yang mau dicatat.
+2. Jika pengguna mencatat transaksi keuangan:
+   - "intent": "TRANSACTION_ENTRY" atau "BALANCE_ADJUSTMENT" atau "MULTI_ACTION"
+   - Cocokkan dompet terdekat (default: "${availableWallets.isNotEmpty ? availableWallets.first : 'Dompet Tunai'}").
+   - Cocokkan kategori terdekat (misal: "kopi/makan" -> "Makanan & Kopi", "bensin" -> "Transportasi", "gaji" -> "Gaji & Pendapatan").
+   - Deteksi tipe: "EXPENSE", "INCOME", "TRANSFER", atau "ADJUSTMENT".
+   - "natural_response": Pesan konfirmasi khas Mr. Wallet (gembira saat pemasukan/cuan masuk, teliti & siaga saat pengeluaran).
+3. Jika pengguna menyebutkan jadwal/pengingat/rutinitas (misal: "jadwal gaji tiap bulan", "ingatkan bayar tagihan", "tambahkan task pemasukan gaji 6juta tiap bulan"):
+   - "intent": "TASK_ENTRY" atau "MULTI_ACTION"
+   - Jangan masukkan ke array "transactions" jika ini adalah rencana/jadwal masa depan atau rutinitas, masukkan ke array "tasks".
+   - "type": "EXPENSE" (untuk pengeluaran/tagihan) atau "INCOME" (untuk gaji/pemasukan berkala).
+   - "recurrence": "NONE" (sekali saja), "WEEKLY" (tiap minggu), atau "MONTHLY" (tiap bulan).
+   - "estimated_amount": nominal uang jika disebutkan (contoh: 6juta -> 6000000).
+   - "wallet_name": nama dompet/rekening jika disebutkan.
 
 Skema JSON yang WAJIB dipatuhi:
 {
-  "intent": "TRANSACTION_ENTRY" | "TASK_ENTRY" | "MULTI_ACTION" | "BALANCE_ADJUSTMENT" | "SUMMARY_QUERY",
+  "intent": "CHAT" | "TRANSACTION_ENTRY" | "TASK_ENTRY" | "MULTI_ACTION" | "BALANCE_ADJUSTMENT" | "SUMMARY_QUERY",
   "transactions": [
     {
       "wallet_name": "string (sesuai daftar dompet terdekat)",
@@ -182,14 +217,16 @@ Skema JSON yang WAJIB dipatuhi:
       "due_date": "YYYY-MM-DDTHH:mm:ss",
       "priority": "LOW" | "MEDIUM" | "HIGH",
       "estimated_amount": number or null,
-      "wallet_name": "string or null"
+      "wallet_name": "string or null",
+      "type": "EXPENSE" | "INCOME",
+      "recurrence": "NONE" | "WEEKLY" | "MONTHLY"
     }
   ],
   "summary_request": {
     "is_requested": boolean,
     "query_target": "FINANCE_TODAY" | "FINANCE_MONTH" | "TASKS_UPCOMING" | null
   },
-  "natural_response": "Pesan konfirmasi ringkas dan ramah (contoh: 'Mencatat pengeluaran Makan sebesar Rp 25.000 dari Dompet Tunai.')"
+  "natural_response": "Jawaban dari Mr. Wallet untuk pengguna"
 }
 ''';
 
@@ -199,15 +236,16 @@ Skema JSON yang WAJIB dipatuhi:
           headers: {
             'Authorization': 'Bearer $apiKey',
             'Content-Type': 'application/json',
+            'Accept': 'application/json',
           },
           body: jsonEncode({
             'model': modelName,
             'messages': [
               {'role': 'system', 'content': systemPrompt},
-              {'role': 'user', 'content': trimmed},
+              {'role': 'user', 'content': clean},
             ],
             'stream': false,
-            'temperature': 0.1,
+            'temperature': 0.3,
           }),
         );
 
@@ -229,9 +267,11 @@ Skema JSON yang WAJIB dipatuhi:
           }
         } else {
           debugPrint('Route9 API error status ${response.statusCode}: ${response.body}');
+          throw Exception('API status ${response.statusCode}: ${response.body}');
         }
       } catch (e) {
-        debugPrint('Custom AI parse error: $e. Falling back to local heuristic parser.');
+        debugPrint('Custom AI parse error: $e');
+        rethrow;
       }
     }
 
@@ -331,10 +371,17 @@ Teks Mentah dari OCR (jika ada): "$rawOCRText"
     if (numMatch != null) {
       final rawNumStr = numMatch.group(1)!.replaceAll(',', '.');
       final baseNum = double.tryParse(rawNumStr) ?? 0;
-      if (lower.contains('ribu') || lower.contains('rb') || lower.contains('k')) {
+      final fullMatchStr = numMatch.group(0)?.toLowerCase() ?? '';
+      if (fullMatchStr.contains('ribu') || fullMatchStr.contains('rb') || fullMatchStr.contains('k') ||
+          lower.contains('${numMatch.group(1)} ribu') || lower.contains('${numMatch.group(1)}rb') || lower.contains('${numMatch.group(1)}k') || lower.contains('${numMatch.group(1)} k')) {
         amount = baseNum * 1000;
+      } else if (fullMatchStr.contains('juta') || fullMatchStr.contains('jt') ||
+          lower.contains('${numMatch.group(1)} juta') || lower.contains('${numMatch.group(1)}jt') || lower.contains('${numMatch.group(1)}juta') || lower.contains('${numMatch.group(1)} jt')) {
+        amount = baseNum * 1000000;
       } else if (lower.contains('juta') || lower.contains('jt')) {
         amount = baseNum * 1000000;
+      } else if (lower.contains('ribu') || lower.contains('rb') || lower.contains('k')) {
+        amount = baseNum * 1000;
       } else {
         amount = baseNum;
       }
@@ -420,35 +467,78 @@ Teks Mentah dari OCR (jika ada): "$rawOCRText"
         lower.contains('servis') ||
         lower.contains('bayar tagihan') ||
         lower.contains('meeting') ||
-        lower.contains('besok')) {
+        lower.contains('besok') ||
+        lower.contains('tiap') ||
+        lower.contains('setiap') ||
+        lower.contains('bulan') ||
+        lower.contains('minggu') ||
+        lower.contains('rutin')) {
       DateTime dueDate = DateTime.now().add(const Duration(hours: 3));
       if (lower.contains('besok')) {
         dueDate = DateTime.now().add(const Duration(days: 1));
+      } else if (lower.contains('bulan') || lower.contains('tiap bulan') || lower.contains('gaji')) {
+        // Jatuh tempo bulan depan tanggal 1 atau hari ini
+        dueDate = DateTime(DateTime.now().year, DateTime.now().month + 1, 1);
+      }
+
+      String taskType = 'EXPENSE';
+      if (lower.contains('gaji') || lower.contains('pemasukan') || lower.contains('terima') || lower.contains('masuk')) {
+        taskType = 'INCOME';
+      }
+
+      String taskRecurrence = 'NONE';
+      if (lower.contains('tiap bulan') || lower.contains('setiap bulan') || lower.contains('bulanan')) {
+        taskRecurrence = 'MONTHLY';
+      } else if (lower.contains('tiap minggu') || lower.contains('setiap minggu') || lower.contains('mingguan')) {
+        taskRecurrence = 'WEEKLY';
       }
 
       tasks.add(AIParsedTask(
-        title: input.length > 35 ? input.substring(0, 35) : input,
+        title: input.length > 40 ? input.substring(0, 40) : input,
         dueDate: dueDate,
         priority: lower.contains('penting') || lower.contains('urgent')
             ? 'HIGH'
             : 'MEDIUM',
         estimatedAmount: amount > 0 ? amount : null,
         walletName: chosenWallet,
+        type: taskType,
+        recurrence: taskRecurrence,
       ));
     }
 
     String intent = 'TRANSACTION_ENTRY';
+    String naturalResponse = 'Mencatat transaksi untukmu.';
+
+    if (transactions.isNotEmpty) {
+      final firstTx = transactions.first;
+      final typeLabel = firstTx.type == 'INCOME'
+          ? 'Pemasukan'
+          : (firstTx.type == 'TRANSFER' ? 'Transfer Saldo' : 'Pengeluaran');
+      naturalResponse =
+          '$typeLabel ${firstTx.category} sebesar Rp ${firstTx.amount.toStringAsFixed(0)} via ${firstTx.walletName} siap dicatat.';
+    } else if (tasks.isNotEmpty) {
+      intent = 'TASK_ENTRY';
+      naturalResponse = 'Pengingat "${tasks.first.title}" siap dijadwalkan.';
+    } else {
+      // Kalimat sapaan santai atau teks umum tanpa nominal
+      intent = 'CHAT_GREETING';
+      if (lower.contains('halo') || lower.contains('hai') || lower.contains('pagi') || lower.contains('malam') || lower.contains('siang')) {
+        naturalResponse = 'Halo juga! Ada pengeluaran atau pemasukan yang mau kamu catat hari ini? Ketik saja ya (misal: "Beli kopi 25rb pakai Tunai").';
+      } else {
+        naturalResponse = 'Aku siap membantu mencatat keuanganmu! Tuliskan nama barang dan nominalnya ya (contoh: "Beli makan siang 35rb").';
+      }
+    }
+
     if (transactions.isNotEmpty && tasks.isNotEmpty) {
       intent = 'MULTI_ACTION';
-    } else if (tasks.isNotEmpty && transactions.isEmpty) {
-      intent = 'TASK_ENTRY';
+      naturalResponse = 'Transaksi dan jadwal pengingat berhasil disiapkan bersamaan.';
     }
 
     return AIParsedResult(
       intent: intent,
       transactions: transactions,
       tasks: tasks,
-      naturalResponse: 'Perintah berhasil diekstrak secara deterministik.',
+      naturalResponse: naturalResponse,
     );
   }
 

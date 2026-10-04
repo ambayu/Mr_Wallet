@@ -45,6 +45,8 @@ class AIParsedTask {
   final String priority; // LOW, MEDIUM, HIGH
   final double? estimatedAmount;
   final String? walletName;
+  final String type; // EXPENSE, INCOME
+  final String recurrence; // NONE, WEEKLY, MONTHLY
 
   AIParsedTask({
     required this.title,
@@ -52,6 +54,8 @@ class AIParsedTask {
     this.priority = 'MEDIUM',
     this.estimatedAmount,
     this.walletName,
+    this.type = 'EXPENSE',
+    this.recurrence = 'NONE',
   });
 
   factory AIParsedTask.fromJson(Map<String, dynamic> json) {
@@ -69,6 +73,8 @@ class AIParsedTask {
       priority: (json['priority'] as String? ?? 'MEDIUM').toUpperCase(),
       estimatedAmount: (json['estimated_amount'] as num?)?.toDouble(),
       walletName: json['wallet_name'] as String?,
+      type: (json['type'] as String? ?? 'EXPENSE').toUpperCase(),
+      recurrence: (json['recurrence'] as String? ?? 'NONE').toUpperCase(),
     );
   }
 
@@ -79,6 +85,8 @@ class AIParsedTask {
       'priority': priority,
       'estimated_amount': estimatedAmount,
       'wallet_name': walletName,
+      'type': type,
+      'recurrence': recurrence,
     };
   }
 }

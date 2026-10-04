@@ -9,8 +9,8 @@ import '../../data/models/wallet_model.dart';
 import '../providers/savings_goal_provider.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/dialogs/add_funds_dialog.dart';
+import '../widgets/dialogs/add_savings_goal_dialog.dart';
 import '../widgets/dialogs/add_wallet_dialog.dart';
-import '../widgets/dialogs/balance_adjustment_dialog.dart';
 import '../widgets/neo_button.dart';
 import '../widgets/neo_card.dart';
 import 'savings_goals_screen.dart';
@@ -47,37 +47,15 @@ class WalletsScreen extends StatelessWidget {
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Top Clean Header: "Tabungan" & Settings / Reconcile Icon
-              Row(
-                mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                children: [
-                  const Text(
-                    'Tabungan',
-                    style: TextStyle(
-                      fontSize: 30,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textBlack,
-                      letterSpacing: -0.6,
-                    ),
-                  ),
-                  GestureDetector(
-                    onTap: () => BalanceAdjustmentDialog.show(context),
-                    child: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: Colors.white,
-                        shape: BoxShape.circle,
-                        border: Border.all(color: AppColors.borderBlack, width: 2),
-                      ),
-                      child: const Icon(
-                        Icons.donut_large_rounded,
-                        size: 20,
-                        color: AppColors.textBlack,
-                      ),
-                    ),
-                  ),
-                ],
+              // Top Clean Header: "Tabungan"
+              const Text(
+                'Tabungan',
+                style: TextStyle(
+                  fontSize: 30,
+                  fontWeight: FontWeight.w900,
+                  color: AppColors.textBlack,
+                  letterSpacing: -0.6,
+                ),
               ),
               const SizedBox(height: 16),
 
@@ -247,11 +225,11 @@ class WalletsScreen extends StatelessWidget {
               ),
               const SizedBox(height: 12),
 
-              // 6. Daftar Pencapaian (maks 3 teratas)
-              if (goals.isEmpty)
+              // 6. Daftar Pencapaian (maks 3 teratas yang aktif)
+              if (goalProv.activeGoals.isEmpty)
                 _buildEmptyGoals(context)
               else
-                ...goals.take(3).map((goal) => Padding(
+                ...goalProv.activeGoals.take(3).map((goal) => Padding(
                       padding: const EdgeInsets.only(bottom: 12),
                       child: _buildGoalItem(context, goal),
                     )),
@@ -480,115 +458,305 @@ class WalletsScreen extends StatelessWidget {
   Widget _buildGoalItem(BuildContext context, SavingsGoalModel goal) {
     final iconData = _goalIconMap[goal.icon] ?? Icons.savings_rounded;
 
-    return NeoCard(
-      backgroundColor: AppColors.cardWhite,
-      borderRadius: 18,
-      borderWidth: 1.8,
-      padding: const EdgeInsets.all(14),
-      child: Column(
-        children: [
-          Row(
-            children: [
-              Container(
-                width: 44,
-                height: 44,
-                decoration: BoxDecoration(
-                  color: AppColors.fromHex(goal.color),
-                  borderRadius: BorderRadius.circular(14),
-                  border: Border.all(color: AppColors.borderBlack, width: 1.5),
+    return GestureDetector(
+      onTap: () => _showGoalActionSheet(context, goal),
+      child: NeoCard(
+        backgroundColor: AppColors.cardWhite,
+        borderRadius: 18,
+        borderWidth: 1.8,
+        padding: const EdgeInsets.all(14),
+        child: Column(
+          children: [
+            Row(
+              children: [
+                Container(
+                  width: 44,
+                  height: 44,
+                  decoration: BoxDecoration(
+                    color: AppColors.fromHex(goal.color),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.borderBlack, width: 1.5),
+                  ),
+                  child: Icon(iconData, size: 20, color: AppColors.textBlack),
                 ),
-                child: Icon(iconData, size: 20, color: AppColors.textBlack),
-              ),
-              const SizedBox(width: 12),
-              Expanded(
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      goal.name,
-                      maxLines: 1,
-                      overflow: TextOverflow.ellipsis,
-                      style: const TextStyle(
-                        fontSize: 14,
-                        fontWeight: FontWeight.w900,
-                        color: AppColors.textBlack,
+                const SizedBox(width: 12),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        goal.name,
+                        maxLines: 1,
+                        overflow: TextOverflow.ellipsis,
+                        style: const TextStyle(
+                          fontSize: 14,
+                          fontWeight: FontWeight.w900,
+                          color: AppColors.textBlack,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Row(
+                        children: [
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFFE0F2FE),
+                              borderRadius: BorderRadius.circular(8),
+                              border: Border.all(color: AppColors.borderBlack, width: 1.2),
+                            ),
+                            child: Row(
+                              mainAxisSize: MainAxisSize.min,
+                              children: [
+                                const Icon(Icons.account_balance_wallet_rounded, size: 12, color: AppColors.textBlack),
+                                const SizedBox(width: 4.5),
+                                Text(
+                                  goal.walletName ?? 'Dompet Utama',
+                                  style: const TextStyle(
+                                    fontSize: 11.5,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textBlack,
+                                  ),
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: RichText(
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              text: TextSpan(
+                                children: [
+                                  TextSpan(
+                                    text: CurrencyFormatter.formatShort(goal.effectiveSavedAmount),
+                                    style: const TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w900,
+                                      color: Color(0xFF16A34A),
+                                    ),
+                                  ),
+                                  const TextSpan(
+                                    text: ' / ',
+                                    style: TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w700,
+                                      color: AppColors.textMuted,
+                                    ),
+                                  ),
+                                  TextSpan(
+                                    text: CurrencyFormatter.formatShort(goal.targetAmount),
+                                    style: const TextStyle(
+                                      fontSize: 13.5,
+                                      fontWeight: FontWeight.w800,
+                                      color: AppColors.textBlack,
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Progress Bar & Persentase Sebaris (Loading dari kiri ke kanan)
+            Row(
+              children: [
+                Expanded(
+                  child: ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: Container(
+                      height: 8,
+                      decoration: BoxDecoration(
+                        color: const Color(0xFFE2E8F0),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: FractionallySizedBox(
+                        alignment: Alignment.centerLeft,
+                        widthFactor: goal.progress,
+                        child: Container(
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF10B981),
+                            borderRadius: BorderRadius.circular(8),
+                          ),
+                        ),
                       ),
                     ),
-                    const SizedBox(height: 2),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Text(
+                  '${goal.progressPercent}%',
+                  style: const TextStyle(
+                    fontSize: 13,
+                    fontWeight: FontWeight.w900,
+                    color: AppColors.textBlack,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            GestureDetector(
+              onTap: () => AddFundsDialog.show(context, goal),
+              child: Container(
+                width: double.infinity,
+                padding: const EdgeInsets.symmetric(vertical: 8),
+                alignment: Alignment.center,
+                decoration: BoxDecoration(
+                  color: AppColors.mintGreen,
+                  borderRadius: BorderRadius.circular(10),
+                  border: Border.all(color: AppColors.borderBlack, width: 1.5),
+                ),
+                child: const Row(
+                  mainAxisAlignment: MainAxisAlignment.center,
+                  children: [
+                    Icon(Icons.add_rounded,
+                        size: 15, color: AppColors.textBlack),
+                    SizedBox(width: 4),
                     Text(
-                      '${CurrencyFormatter.formatShort(goal.savedAmount)} / ${CurrencyFormatter.formatShort(goal.targetAmount)}',
-                      style: const TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.w600,
-                        color: AppColors.textMuted,
+                      'Tambah Dana',
+                      style: TextStyle(
+                        fontSize: 11.5,
+                        fontWeight: FontWeight.w900,
+                        color: AppColors.textBlack,
                       ),
                     ),
                   ],
                 ),
               ),
-              Text(
-                '${goal.progressPercent}%',
-                style: const TextStyle(
-                  fontSize: 14,
-                  fontWeight: FontWeight.w900,
-                  color: AppColors.textBlack,
-                ),
-              ),
-            ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  void _showGoalActionSheet(BuildContext context, SavingsGoalModel goal) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) => Container(
+        padding: const EdgeInsets.fromLTRB(20, 16, 20, 28),
+        decoration: const BoxDecoration(
+          color: AppColors.cardWhite,
+          borderRadius: BorderRadius.vertical(top: Radius.circular(24)),
+          border: Border(
+            top: BorderSide(color: AppColors.borderBlack, width: 2.5),
+            left: BorderSide(color: AppColors.borderBlack, width: 2.5),
+            right: BorderSide(color: AppColors.borderBlack, width: 2.5),
           ),
-          const SizedBox(height: 10),
-          ClipRRect(
-            borderRadius: BorderRadius.circular(8),
-            child: Container(
-              height: 8,
-              decoration: BoxDecoration(
-                color: const Color(0xFFE2E8F0),
-                borderRadius: BorderRadius.circular(8),
-              ),
-              child: FractionallySizedBox(
-                alignment: Alignment.centerLeft,
-                widthFactor: goal.progress,
-                child: Container(
-                  decoration: BoxDecoration(
-                    color: const Color(0xFF10B981),
-                    borderRadius: BorderRadius.circular(8),
-                  ),
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Center(
+              child: Container(
+                width: 40,
+                height: 4,
+                decoration: BoxDecoration(
+                  color: AppColors.borderBlack.withValues(alpha: 0.3),
+                  borderRadius: BorderRadius.circular(2),
                 ),
               ),
             ),
-          ),
-          const SizedBox(height: 10),
-          GestureDetector(
-            onTap: () => AddFundsDialog.show(context, goal),
-            child: Container(
-              width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 8),
-              alignment: Alignment.center,
-              decoration: BoxDecoration(
-                color: AppColors.mintGreen,
-                borderRadius: BorderRadius.circular(10),
-                border: Border.all(color: AppColors.borderBlack, width: 1.5),
-              ),
-              child: const Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Icon(Icons.add_rounded,
-                      size: 15, color: AppColors.textBlack),
-                  SizedBox(width: 4),
-                  Text(
-                    'Tambah Dana',
-                    style: TextStyle(
-                      fontSize: 11.5,
-                      fontWeight: FontWeight.w900,
-                      color: AppColors.textBlack,
-                    ),
-                  ),
-                ],
+            const SizedBox(height: 16),
+            Text(
+              goal.name,
+              maxLines: 1,
+              overflow: TextOverflow.ellipsis,
+              style: const TextStyle(
+                fontSize: 16,
+                fontWeight: FontWeight.w900,
+                color: AppColors.textBlack,
               ),
             ),
+            const SizedBox(height: 4),
+            Text(
+              '${CurrencyFormatter.formatRupiah(goal.effectiveSavedAmount)} / ${CurrencyFormatter.formatRupiah(goal.targetAmount)} (${goal.progressPercent}%)',
+              style: const TextStyle(
+                fontSize: 12.5,
+                fontWeight: FontWeight.w700,
+                color: AppColors.textMuted,
+              ),
+            ),
+            const SizedBox(height: 20),
+            Row(
+              children: [
+                Expanded(
+                  child: NeoButton(
+                    label: 'Edit',
+                    icon: Icons.edit_rounded,
+                    backgroundColor: AppColors.butterYellow,
+                    textColor: AppColors.textBlack,
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      AddSavingsGoalDialog.show(context, existing: goal);
+                    },
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: NeoButton(
+                    label: 'Hapus',
+                    icon: Icons.delete_outline_rounded,
+                    backgroundColor: const Color(0xFFFFE4E6),
+                    textColor: AppColors.dangerRed,
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _confirmDeleteGoal(context, goal);
+                    },
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _confirmDeleteGoal(BuildContext context, SavingsGoalModel goal) async {
+    final confirmed = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: AppColors.butterYellow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.borderBlack, width: 2.2),
+        ),
+        title: const Text(
+          'Hapus Pencapaian?',
+          style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16),
+        ),
+        content: Text('"${goal.name}" akan dihapus permanen.'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text('Batal', style: TextStyle(color: AppColors.textBlack, fontWeight: FontWeight.w800)),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Hapus', style: TextStyle(color: AppColors.dangerRed, fontWeight: FontWeight.w900)),
           ),
         ],
       ),
     );
+
+    if (confirmed == true && context.mounted) {
+      await Provider.of<SavingsGoalProvider>(context, listen: false).deleteGoal(goal.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(
+            content: Text('Pencapaian berhasil dihapus'),
+            backgroundColor: AppColors.textBlack,
+          ),
+        );
+      }
+    }
   }
 }

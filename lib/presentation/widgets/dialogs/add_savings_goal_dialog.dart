@@ -2,8 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../../core/utils/currency_formatter.dart';
+import '../../../core/utils/wallet_icon_helper.dart';
 import '../../../data/models/savings_goal_model.dart';
 import '../../providers/savings_goal_provider.dart';
+import '../../providers/wallet_provider.dart';
 import '../neo_button.dart';
 import '../neo_text_field.dart';
 
@@ -32,8 +35,10 @@ class _AddSavingsGoalDialogState extends State<AddSavingsGoalDialog> {
   final NumberFormat _currencyFormat = NumberFormat('#,###', 'id_ID');
 
   DateTime? _deadline;
+  String? _selectedWalletId;
   String _selectedIcon = 'savings';
   String _selectedColor = '#D6F0FF';
+  bool _isCompleted = false;
   bool _isSaving = false;
 
   bool get _isEdit => widget.existing != null;
@@ -81,8 +86,19 @@ class _AddSavingsGoalDialogState extends State<AddSavingsGoalDialog> {
       _nameController.text = existing.name;
       _targetController.text = _currencyFormat.format(existing.targetAmount);
       _deadline = existing.deadline;
+      _selectedWalletId = existing.walletId;
       _selectedIcon = existing.icon;
       _selectedColor = existing.color;
+      _isCompleted = existing.isCompleted;
+    } else {
+      final walletProv = Provider.of<WalletProvider>(context, listen: false);
+      if (walletProv.wallets.isNotEmpty) {
+        final def = walletProv.wallets.firstWhere(
+          (w) => w.isDefault,
+          orElse: () => walletProv.wallets.first,
+        );
+        _selectedWalletId = def.id;
+      }
     }
     _nameController.addListener(() {
       if (mounted) setState(() {});
@@ -150,6 +166,13 @@ class _AddSavingsGoalDialogState extends State<AddSavingsGoalDialog> {
           clearDeadline: _deadline == null,
           icon: _selectedIcon,
           color: _selectedColor,
+          walletId: _selectedWalletId,
+          clearWalletId: _selectedWalletId == null,
+          isCompleted: _isCompleted,
+          completedAt: _isCompleted
+              ? (widget.existing!.completedAt ?? DateTime.now())
+              : null,
+          clearCompletedAt: !_isCompleted,
         );
         await provider.updateGoal(updated);
       } else {
@@ -159,6 +182,7 @@ class _AddSavingsGoalDialogState extends State<AddSavingsGoalDialog> {
           deadline: _deadline,
           icon: _selectedIcon,
           color: _selectedColor,
+          walletId: _selectedWalletId,
         );
       }
 
@@ -269,6 +293,62 @@ class _AddSavingsGoalDialogState extends State<AddSavingsGoalDialog> {
                   keyboardType: TextInputType.number,
                   prefixIcon: Icons.savings_rounded,
                   onChanged: _onTargetChanged,
+                ),
+                const SizedBox(height: 14),
+
+                // Dompet Pencapaian (Acuan Pengumpulan Dana)
+                const Text(
+                  'Dompet Acuan Pengumpulan:',
+                  style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
+                ),
+                const SizedBox(height: 8),
+                Consumer<WalletProvider>(
+                  builder: (context, walletProv, _) {
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardWhite,
+                        borderRadius: BorderRadius.circular(18),
+                        border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                        boxShadow: const [
+                          BoxShadow(
+                            color: AppColors.shadowBlack,
+                            offset: Offset(2, 2.5),
+                            blurRadius: 0,
+                          ),
+                        ],
+                      ),
+                      child: DropdownButtonHideUnderline(
+                        child: DropdownButton<String>(
+                          isExpanded: true,
+                          value: walletProv.wallets.any((w) => w.id == _selectedWalletId)
+                              ? _selectedWalletId
+                              : (walletProv.wallets.isNotEmpty ? walletProv.wallets.first.id : null),
+                          items: walletProv.wallets.map((w) {
+                            return DropdownMenuItem(
+                              value: w.id,
+                              child: Row(
+                                children: [
+                                  Icon(WalletIconHelper.resolve(w.icon), size: 18, color: AppColors.textBlack),
+                                  const SizedBox(width: 8),
+                                  Flexible(
+                                    child: Text(
+                                      '${w.name} (${CurrencyFormatter.formatShort(w.balance)})',
+                                      overflow: TextOverflow.ellipsis,
+                                      style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13.5),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                            );
+                          }).toList(),
+                          onChanged: (val) {
+                            if (val != null) setState(() => _selectedWalletId = val);
+                          },
+                        ),
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 14),
 
@@ -417,6 +497,52 @@ class _AddSavingsGoalDialogState extends State<AddSavingsGoalDialog> {
                     );
                   }).toList(),
                 ),
+
+                // Status Selesai (Khusus mode edit)
+                if (_isEdit) ...[
+                  const SizedBox(height: 18),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: _isCompleted ? const Color(0xFFDCFCE7) : AppColors.cardWhite,
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Row(
+                          children: [
+                            Icon(
+                              _isCompleted ? Icons.check_circle_rounded : Icons.flag_circle_rounded,
+                              color: _isCompleted ? const Color(0xFF16A34A) : AppColors.textBlack,
+                              size: 24,
+                            ),
+                            const SizedBox(width: 10),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text(
+                                  'Tandai Telah Tercapai',
+                                  style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13.5),
+                                ),
+                                Text(
+                                  _isCompleted ? 'Pencapaian selesai & masuk arsip' : 'Pencapaian masih aktif berlangsung',
+                                  style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 11, color: AppColors.textMuted),
+                                ),
+                              ],
+                            ),
+                          ],
+                        ),
+                        Switch(
+                          value: _isCompleted,
+                          activeThumbColor: const Color(0xFF16A34A),
+                          onChanged: (val) => setState(() => _isCompleted = val),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
                 const SizedBox(height: 24),
 
                 // Tombol Simpan

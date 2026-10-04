@@ -23,7 +23,7 @@ class AppDatabase {
       return await databaseFactory.openDatabase(
         'smartflow_ledger.db',
         options: OpenDatabaseOptions(
-          version: 2,
+          version: 5,
           onConfigure: _onConfigure,
           onCreate: _onCreate,
           onUpgrade: _onUpgrade,
@@ -52,7 +52,7 @@ class AppDatabase {
     return await databaseFactory.openDatabase(
       path,
       options: OpenDatabaseOptions(
-        version: 2,
+        version: 5,
         onConfigure: _onConfigure,
         onCreate: _onCreate,
         onUpgrade: _onUpgrade,
@@ -124,12 +124,17 @@ class AppDatabase {
           description TEXT NOT NULL DEFAULT '',
           priority TEXT NOT NULL DEFAULT 'MEDIUM',
           status TEXT NOT NULL DEFAULT 'PENDING',
+          type TEXT NOT NULL DEFAULT 'EXPENSE',
+          recurrence TEXT NOT NULL DEFAULT 'NONE',
+          category_id TEXT,
           due_date TEXT NOT NULL,
           reminder_at TEXT,
+          completed_at TEXT,
           estimated_amount REAL,
           wallet_id TEXT,
           created_at TEXT NOT NULL,
           FOREIGN KEY (transaction_id) REFERENCES transactions (id) ON DELETE SET NULL,
+          FOREIGN KEY (category_id) REFERENCES categories (id) ON DELETE SET NULL,
           FOREIGN KEY (wallet_id) REFERENCES wallets (id) ON DELETE SET NULL
         )
       ''');
@@ -294,7 +299,11 @@ class AppDatabase {
         deadline TEXT,
         icon TEXT NOT NULL DEFAULT 'savings',
         color TEXT NOT NULL DEFAULT '#D6F0FF',
-        created_at TEXT NOT NULL
+        wallet_id TEXT,
+        is_completed INTEGER NOT NULL DEFAULT 0,
+        completed_at TEXT,
+        created_at TEXT NOT NULL,
+        FOREIGN KEY (wallet_id) REFERENCES wallets (id) ON DELETE SET NULL
       )
     ''');
   }
@@ -319,6 +328,7 @@ class AppDatabase {
             'deadline': null,
             'icon': 'flight_takeoff',
             'color': '#D6F0FF',
+            'wallet_id': 'w_bca',
             'created_at': now,
           },
           {
@@ -329,6 +339,7 @@ class AppDatabase {
             'deadline': null,
             'icon': 'laptop_mac',
             'color': '#D6F0FF',
+            'wallet_id': 'w_mandiri',
             'created_at': now,
           },
           {
@@ -339,6 +350,7 @@ class AppDatabase {
             'deadline': null,
             'icon': 'shield',
             'color': '#D6F0FF',
+            'wallet_id': 'w_cash',
             'created_at': now,
           },
         ];
@@ -346,6 +358,41 @@ class AppDatabase {
           await db.insert('savings_goals', goal);
         }
       }
+    }
+
+    if (oldVersion < 3) {
+      // Tambahkan kolom wallet_id jika belum ada (upgrade dari v2 ke v3)
+      try {
+        await db.execute('ALTER TABLE savings_goals ADD COLUMN wallet_id TEXT');
+      } catch (e) {
+        // Kolom mungkin sudah dibuat di createSavingsGoalsTable
+      }
+    }
+
+    if (oldVersion < 4) {
+      // Upgrade ke v4: tambahkan type, recurrence, category_id, completed_at ke tabel tasks
+      try {
+        await db.execute("ALTER TABLE tasks ADD COLUMN type TEXT NOT NULL DEFAULT 'EXPENSE'");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE tasks ADD COLUMN recurrence TEXT NOT NULL DEFAULT 'NONE'");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE tasks ADD COLUMN category_id TEXT");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE tasks ADD COLUMN completed_at TEXT");
+      } catch (_) {}
+    }
+
+    if (oldVersion < 5) {
+      // Upgrade ke v5: tambahkan is_completed dan completed_at ke tabel savings_goals
+      try {
+        await db.execute("ALTER TABLE savings_goals ADD COLUMN is_completed INTEGER NOT NULL DEFAULT 0");
+      } catch (_) {}
+      try {
+        await db.execute("ALTER TABLE savings_goals ADD COLUMN completed_at TEXT");
+      } catch (_) {}
     }
   }
 

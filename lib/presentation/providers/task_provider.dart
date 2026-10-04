@@ -19,10 +19,25 @@ class TaskProvider extends ChangeNotifier {
             notificationService ?? NotificationService.instance;
 
   List<TaskModel> get tasks => _tasks;
+  
   List<TaskModel> get pendingTasks =>
       _tasks.where((t) => t.status != 'COMPLETED').toList();
+
+  List<TaskModel> get pendingExpenses =>
+      _tasks.where((t) => t.status != 'COMPLETED' && t.isExpense).toList();
+
+  List<TaskModel> get pendingIncomes =>
+      _tasks.where((t) => t.status != 'COMPLETED' && t.isIncome).toList();
+
   List<TaskModel> get completedTasks =>
       _tasks.where((t) => t.status == 'COMPLETED').toList();
+
+  double get totalPendingExpense =>
+      pendingExpenses.fold(0.0, (sum, t) => sum + (t.estimatedAmount ?? 0.0));
+
+  double get totalPendingIncome =>
+      pendingIncomes.fold(0.0, (sum, t) => sum + (t.estimatedAmount ?? 0.0));
+
   bool get isLoading => _isLoading;
 
   Future<void> loadTasks() async {
@@ -43,6 +58,9 @@ class TaskProvider extends ChangeNotifier {
     required String title,
     String description = '',
     String priority = 'MEDIUM',
+    String type = 'EXPENSE',
+    String recurrence = 'NONE',
+    String? categoryId,
     required DateTime dueDate,
     DateTime? reminderAt,
     double? estimatedAmount,
@@ -54,6 +72,9 @@ class TaskProvider extends ChangeNotifier {
       title: title,
       description: description,
       priority: priority,
+      type: type,
+      recurrence: recurrence,
+      categoryId: categoryId,
       dueDate: dueDate,
       reminderAt: reminderAt ?? dueDate,
       estimatedAmount: estimatedAmount,
@@ -67,12 +88,12 @@ class TaskProvider extends ChangeNotifier {
       final alarmTime = reminderAt ?? dueDate;
       await _notificationService.scheduleTaskAlarm(
         id: id.hashCode,
-        title: 'Pengingat SmartFlow: $title',
+        title: 'Pengingat Mr. Wallet: $title',
         body: estimatedAmount != null
-            ? 'Estimasi: Rp ${estimatedAmount.toStringAsFixed(0)} • $description'
+            ? '${type == 'INCOME' ? 'Pemasukan' : 'Tagihan'}: Rp ${estimatedAmount.toStringAsFixed(0)} • $description'
             : description.isNotEmpty
                 ? description
-                : 'Batas waktu tugas Anda sudah tiba!',
+                : 'Batas waktu tugas keuangan Anda sudah tiba!',
         scheduledDate: alarmTime,
       );
     }
@@ -80,9 +101,28 @@ class TaskProvider extends ChangeNotifier {
     await loadTasks();
   }
 
-  Future<void> toggleTaskStatus(TaskModel task) async {
-    final isNowCompleted = task.status != 'COMPLETED';
-    await _taskRepository.toggleTaskStatus(task.id, isNowCompleted);
+  Future<void> updateTask(TaskModel task) async {
+    await _taskRepository.updateTask(task);
+    await loadTasks();
+  }
+
+  /// Eksekusi Finansial saat task dicentang (langsung potong/tambah saldo dompet & catat transaksi)
+  Future<void> completeTaskWithFinancialAction({
+    required TaskModel task,
+    required String walletId,
+    double? customAmount,
+  }) async {
+    await _taskRepository.executeTaskCompletion(
+      task: task,
+      walletId: walletId,
+      customAmount: customAmount,
+    );
+    await loadTasks();
+  }
+
+  /// Membatalkan penyelesaian task (revert saldo & hapus transaksi)
+  Future<void> revertTask(TaskModel task) async {
+    await _taskRepository.revertTaskCompletion(task);
     await loadTasks();
   }
 

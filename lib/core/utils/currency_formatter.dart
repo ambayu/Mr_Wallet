@@ -25,11 +25,31 @@ class CurrencyFormatter {
     return _compactFormat.format(amount);
   }
 
+  static String _trimTrailingZero(double val, int decimals) {
+    String str = val.toStringAsFixed(decimals);
+    if (str.contains('.')) {
+      str = str.replaceAll(RegExp(r'0*$'), '');
+      str = str.replaceAll(RegExp(r'\.$'), '');
+    }
+    return str;
+  }
+
   static String formatShort(double amount) {
-    if (amount >= 1000000) {
-      return 'Rp ${(amount / 1000000).toStringAsFixed(1)}jt';
-    } else if (amount >= 1000) {
-      return 'Rp ${(amount / 1000).toStringAsFixed(0)}rb';
+    final absAmount = amount.abs();
+    final sign = amount < 0 ? '-' : '';
+
+    if (absAmount >= 1000000000000) {
+      final val = absAmount / 1000000000000;
+      return '$sign' 'Rp ${_trimTrailingZero(val, 1)}T';
+    } else if (absAmount >= 1000000000) {
+      final val = absAmount / 1000000000;
+      return '$sign' 'Rp ${_trimTrailingZero(val, 1)}M';
+    } else if (absAmount >= 1000000) {
+      final val = absAmount / 1000000;
+      return '$sign' 'Rp ${_trimTrailingZero(val, 1)}jt';
+    } else if (absAmount >= 1000) {
+      final val = absAmount / 1000;
+      return '$sign' 'Rp ${_trimTrailingZero(val, 0)}rb';
     }
     return format(amount);
   }
