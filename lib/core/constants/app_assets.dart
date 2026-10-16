@@ -14,11 +14,6 @@ class AppAssets {
   static const String appBackground = 'Assets/wallpaper/background.png';
   static const String appBackgroundLandscape = 'Assets/wallpaper/bg-landscape.png';
 
-  // Showcase / Hero Illustrations
-  static const String showcaseCrabLanding = 'Assets/05_ui_showcase/ui_showcase_yellow_hoodie_crab_wallet.png';
-  static const String showcaseSavingsJourney = 'Assets/05_ui_showcase/ui_showcase_playful_savings_journey.png';
-  static const String showcaseFinanceApp = 'Assets/05_ui_showcase/ui_showcase_finance_app.png';
-
   // Mascot Crab
   static const String mascotLogin = 'Assets/04_mascot_crab/crab_login.png';
   static const String mascotConfetti = 'Assets/04_mascot_crab/mascot_crab_celebration_confetti.png';
@@ -41,41 +36,4 @@ class AppAssets {
   static const String mascotPhone = 'Assets/04_mascot_crab/mascot_crab_with_phone.png';
   static const String mascotRpCoin = 'Assets/04_mascot_crab/mascot_crab_with_rp_coin.png';
   static const String mascotLaptop = 'Assets/04_mascot_crab/mascot_crab_working_laptop.png';
-
-  // Finance Icons
-  static const String iconBankCard = 'Assets/02_icons_finance/icon_bank_card.png';
-  static const String iconCalendar = 'Assets/02_icons_finance/icon_calendar.png';
-  static const String iconCashStack = 'Assets/02_icons_finance/icon_cash_stack.png';
-  static const String iconCoinRp = 'Assets/02_icons_finance/icon_coin_rp.png';
-  static const String iconCoinStack = 'Assets/02_icons_finance/icon_coin_stack.png';
-  static const String iconGrowthChart = 'Assets/02_icons_finance/icon_growth_chart_up.png';
-  static const String iconHeart = 'Assets/02_icons_finance/icon_heart.png';
-  static const String iconLightbulb = 'Assets/02_icons_finance/icon_lightbulb_idea.png';
-  static const String iconMoneyBag = 'Assets/02_icons_finance/icon_money_bag_rp.png';
-  static const String iconNotificationBell = 'Assets/02_icons_finance/icon_notification_bell.png';
-  static const String iconPieChart = 'Assets/02_icons_finance/icon_pie_chart.png';
-  static const String iconPiggyBank = 'Assets/02_icons_finance/icon_piggy_bank.png';
-  static const String iconReceiptNote = 'Assets/02_icons_finance/icon_receipt_note.png';
-  static const String iconShoppingBag = 'Assets/02_icons_finance/icon_shopping_bag.png';
-  static const String iconTargetBullseye = 'Assets/02_icons_finance/icon_target_bullseye.png';
-  static const String iconWalletCash = 'Assets/02_icons_finance/icon_wallet_cash.png';
-
-  // Lifestyle Icons
-  static const String iconCoffeeCup = 'Assets/03_icons_lifestyle/icon_coffee_cup.png';
-  static const String iconCoffeeCupHeart = 'Assets/03_icons_lifestyle/icon_coffee_cup_heart.png';
-  static const String iconHouseHome = 'Assets/03_icons_lifestyle/icon_house_home.png';
-  static const String iconLaptopDevice = 'Assets/03_icons_lifestyle/icon_laptop.png';
-  static const String iconLaptopHeart = 'Assets/03_icons_lifestyle/icon_laptop_heart.png';
-  static const String iconPalmTree = 'Assets/03_icons_lifestyle/icon_palm_tree.png';
-  static const String iconPottedPlant = 'Assets/03_icons_lifestyle/icon_potted_plant.png';
-  static const String iconRollingSuitcase = 'Assets/03_icons_lifestyle/icon_rolling_suitcase.png';
-  static const String iconSparkles = 'Assets/03_icons_lifestyle/icon_sparkles.png';
-  static const String iconSunHappy = 'Assets/03_icons_lifestyle/icon_sun_happy.png';
-  static const String iconSunSparkle = 'Assets/03_icons_lifestyle/icon_sun_sparkle.png';
-  static const String iconSunglasses = 'Assets/03_icons_lifestyle/icon_sunglasses.png';
-  static const String iconBaseballCap = 'Assets/03_icons_lifestyle/icon_baseball_cap_m.png';
-  static const String iconChatBubble = 'Assets/03_icons_lifestyle/icon_chat_bubble.png';
-  static const String iconCloud = 'Assets/03_icons_lifestyle/icon_cloud.png';
-  static const String iconFoldedMap = 'Assets/03_icons_lifestyle/icon_folded_map.png';
-  static const String iconGlobe = 'Assets/03_icons_lifestyle/icon_globe.png';
 }
