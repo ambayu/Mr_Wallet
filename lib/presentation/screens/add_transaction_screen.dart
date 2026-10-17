@@ -261,7 +261,7 @@ class _AddTransactionScreenState extends State<AddTransactionScreen> {
                       const SizedBox(width: 8),
                       const Expanded(
                         child: Text(
-                          'Untuk apa dan berapa harganya? (Ketik bebas / AI)',
+                          'Catat apa hari ini? (Ketik / Tanya AI)',
                           style: TextStyle(
                             fontSize: 12.5,
                             fontWeight: FontWeight.w800,

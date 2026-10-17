@@ -80,10 +80,11 @@ class TaskRepository {
     required TaskModel task,
     required String walletId,
     double? customAmount,
+    DateTime? completionDate,
   }) async {
     final db = await _appDatabase.database;
     final amount = customAmount ?? task.estimatedAmount ?? 0.0;
-    final now = DateTime.now();
+    final effectiveDate = completionDate ?? DateTime.now();
 
     await db.transaction((txn) async {
       String? txId;
@@ -100,8 +101,8 @@ class TaskRepository {
           type: txType,
           amount: amount,
           description: task.title,
-          transactionDate: now,
-          createdAt: now,
+          transactionDate: effectiveDate,
+          createdAt: DateTime.now(),
         );
 
         await txn.insert('transactions', transaction.toMap());
@@ -125,7 +126,7 @@ class TaskRepository {
         'tasks',
         {
           'status': 'COMPLETED',
-          'completed_at': now.toIso8601String(),
+          'completed_at': effectiveDate.toIso8601String(),
           'wallet_id': walletId,
           'transaction_id': txId,
         },

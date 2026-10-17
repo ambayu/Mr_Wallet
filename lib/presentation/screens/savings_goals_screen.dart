@@ -9,6 +9,7 @@ import '../providers/savings_goal_provider.dart';
 import '../providers/transaction_provider.dart';
 import '../providers/wallet_provider.dart';
 import '../widgets/app_background_scaffold.dart';
+import '../widgets/celebration/confetti_celebration_dialog.dart';
 import '../widgets/dialogs/add_funds_dialog.dart';
 import '../widgets/dialogs/add_savings_goal_dialog.dart';
 import '../widgets/neo_button.dart';
@@ -311,19 +312,54 @@ class _SavingsGoalsScreenState extends State<SavingsGoalsScreen> with SingleTick
                             ),
                           ),
                           if (isCompleted)
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                              decoration: BoxDecoration(
-                                color: const Color(0xFFDCFCE7),
-                                borderRadius: BorderRadius.circular(6),
-                                border: Border.all(color: AppColors.borderBlack, width: 0.8),
+                            GestureDetector(
+                              onTap: () => ConfettiCelebrationDialog.show(
+                                context,
+                                title: goal.name,
+                                targetAmount: goal.targetAmount,
+                                walletName: goal.walletName,
+                                subtitle: 'Target berhasil dicapai:',
                               ),
-                              child: const Text(
-                                'Tercapai 🎉',
-                                style: TextStyle(
-                                  fontSize: 10,
-                                  fontWeight: FontWeight.w900,
-                                  color: Color(0xFF16A34A),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: const Color(0xFFDCFCE7),
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.borderBlack, width: 0.8),
+                                ),
+                                child: const Text(
+                                  'Tercapai 🎉',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    color: Color(0xFF16A34A),
+                                  ),
+                                ),
+                              ),
+                            )
+                          else if (goal.isAchieved)
+                            GestureDetector(
+                              onTap: () => ConfettiCelebrationDialog.show(
+                                context,
+                                title: goal.name,
+                                targetAmount: goal.targetAmount,
+                                walletName: goal.walletName,
+                                subtitle: 'Saldo tabunganmu sudah 100% genap:',
+                              ),
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: AppColors.primaryYellow,
+                                  borderRadius: BorderRadius.circular(6),
+                                  border: Border.all(color: AppColors.borderBlack, width: 0.9),
+                                ),
+                                child: const Text(
+                                  '100% Genap! 🎊',
+                                  style: TextStyle(
+                                    fontSize: 10,
+                                    fontWeight: FontWeight.w900,
+                                    color: AppColors.textBlack,
+                                  ),
                                 ),
                               ),
                             ),
@@ -816,11 +852,13 @@ class _SavingsGoalsScreenState extends State<SavingsGoalsScreen> with SingleTick
         await txProv.refreshTransactions();
 
         if (context.mounted) {
-          ScaffoldMessenger.of(context).showSnackBar(
-            SnackBar(
-              content: Text('Selamat! Target "${goal.name}" berhasil direalisasikan! 🎉🛍️'),
-              backgroundColor: AppColors.textBlack,
-            ),
+          // Tampilkan perayaan konfetti spektakuler!
+          await ConfettiCelebrationDialog.show(
+            context,
+            title: goal.name,
+            targetAmount: requiredAmount,
+            walletName: targetWallet.name,
+            subtitle: 'Target berhasil direalisasikan dari dompet:',
           );
         }
       }

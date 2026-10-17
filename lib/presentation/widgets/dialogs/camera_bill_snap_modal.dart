@@ -1,3 +1,4 @@
+import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:provider/provider.dart';
@@ -33,8 +34,8 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
   late String _selectedWalletId;
   final TextEditingController _merchantController = TextEditingController();
   final TextEditingController _amountController = TextEditingController();
-  final TextEditingController _rawOcrController = TextEditingController();
   bool _isSaving = false;
+  String? _errorMessage;
 
   @override
   void initState() {
@@ -48,40 +49,44 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
   void dispose() {
     _merchantController.dispose();
     _amountController.dispose();
-    _rawOcrController.dispose();
     super.dispose();
   }
 
   Future<void> _pickImage(ImageSource source) async {
+    setState(() => _errorMessage = null);
     try {
       final XFile? photo = await _picker.pickImage(
         source: source,
-        imageQuality: 85,
+        imageQuality: 90,
       );
 
-      if (photo != null) {
+      if (photo != null && mounted) {
         setState(() {
           _capturedImagePath = photo.path;
+          _merchantController.clear();
+          _amountController.clear();
         });
 
-        if (mounted) {
-          final aiProv = Provider.of<AIProvider>(context, listen: false);
-          await aiProv.processBillImage(
-            imagePath: photo.path,
-            rawOCRText: _rawOcrController.text.isNotEmpty
-                ? _rawOcrController.text
-                : 'TOTAL RP 45.000\nKAFE MEDAN\n1 KOPI SUSU 25.000\n1 ROTI BAKAR 20.000',
-          );
+        final aiProv = Provider.of<AIProvider>(context, listen: false);
+        await aiProv.processBillImage(imagePath: photo.path);
 
-          if (aiProv.lastOCRResult != null) {
+        if (!mounted) return;
+
+        if (aiProv.errorMessage.isNotEmpty) {
+          setState(() => _errorMessage = aiProv.errorMessage);
+        } else if (aiProv.lastOCRResult != null) {
+          setState(() {
             _merchantController.text = aiProv.lastOCRResult!.merchantName;
             _amountController.text =
                 aiProv.lastOCRResult!.totalAmount.toStringAsFixed(0);
-          }
+            _errorMessage = null;
+          });
         }
       }
     } catch (e) {
-      debugPrint('Error picking image: $e');
+      if (mounted) {
+        setState(() => _errorMessage = 'Gagal membaca gambar. Coba lagi.');
+      }
     }
   }
 
@@ -111,7 +116,7 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Header
+              // ── Header ──────────────────────────────────────────────────
               Row(
                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                 children: [
@@ -119,7 +124,7 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
                       Text(
-                        'Camera Bill Snap',
+                        'Scan Struk',
                         style: TextStyle(
                           fontSize: 22,
                           fontWeight: FontWeight.w900,
@@ -127,7 +132,7 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
                         ),
                       ),
                       Text(
-                        'Ekstraksi Struk Belanja dengan OCR + Vision AI',
+                        'Foto struk → AI baca otomatis',
                         style: TextStyle(
                           fontSize: 12,
                           fontWeight: FontWeight.w700,
@@ -152,7 +157,7 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
               ),
               const SizedBox(height: 18),
 
-              // Image Capture Buttons
+              // ── Tombol Ambil Foto ────────────────────────────────────────
               Row(
                 children: [
                   Expanded(
@@ -160,7 +165,9 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
                       label: 'Buka Kamera',
                       icon: Icons.camera_alt_rounded,
                       backgroundColor: AppColors.mintGreen,
-                      onPressed: () => _pickImage(ImageSource.camera),
+                      onPressed: aiProv.isProcessing
+                          ? null
+                          : () => _pickImage(ImageSource.camera),
                     ),
                   ),
                   const SizedBox(width: 10),
@@ -169,52 +176,123 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
                       label: 'Dari Galeri',
                       icon: Icons.photo_library_rounded,
                       backgroundColor: AppColors.bubblePink,
-                      onPressed: () => _pickImage(ImageSource.gallery),
+                      onPressed: aiProv.isProcessing
+                          ? null
+                          : () => _pickImage(ImageSource.gallery),
                     ),
                   ),
                 ],
               ),
               const SizedBox(height: 16),
 
-              // Raw OCR Simulation Input (Useful for Testing on Desktop / Fallback)
-              NeoTextField(
-                controller: _rawOcrController,
-                labelText: 'Teks OCR Struk (Opsional / Manual Test)',
-                hintText: 'Contoh: KOPI SHOP TOTAL: 35000',
-              ),
-              const SizedBox(height: 10),
-              NeoButton(
-                label: 'Proses Ekstraksi OCR Teks',
-                icon: Icons.document_scanner_outlined,
-                backgroundColor: AppColors.skyBlue,
-                height: 44,
-                onPressed: () async {
-                  await aiProv.processBillImage(
-                    imagePath: _capturedImagePath ?? '',
-                    rawOCRText: _rawOcrController.text.isNotEmpty
-                        ? _rawOcrController.text
-                        : 'KASIR INDOMARET\nROTI TAWAR 18.000\nSUSU KOTAK 12.000\nTOTAL RP 30.000',
-                  );
-
-                  if (aiProv.lastOCRResult != null) {
-                    _merchantController.text =
-                        aiProv.lastOCRResult!.merchantName;
-                    _amountController.text =
-                        aiProv.lastOCRResult!.totalAmount.toStringAsFixed(0);
-                  }
-                },
-              ),
-              const SizedBox(height: 16),
-
-              // Extracted Bill Result Form
-              if (aiProv.isProcessing) ...[
-                const Center(
-                  child: Padding(
-                    padding: EdgeInsets.all(16.0),
-                    child: CircularProgressIndicator(color: AppColors.borderBlack),
+              // ── Preview Gambar ───────────────────────────────────────────
+              if (_capturedImagePath != null && !aiProv.isProcessing) ...[
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(16),
+                  child: Container(
+                    height: 160,
+                    width: double.infinity,
+                    decoration: BoxDecoration(
+                      border: Border.all(color: AppColors.borderBlack, width: 2),
+                      borderRadius: BorderRadius.circular(16),
+                    ),
+                    child: Image.file(
+                      File(_capturedImagePath!),
+                      fit: BoxFit.cover,
+                    ),
                   ),
                 ),
-              ] else if (aiProv.lastOCRResult != null) ...[
+                const SizedBox(height: 14),
+              ],
+
+              // ── Loading State ────────────────────────────────────────────
+              if (aiProv.isProcessing) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 28, horizontal: 20),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardWhite,
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                    boxShadow: const [
+                      BoxShadow(color: AppColors.shadowBlack, offset: Offset(3, 3)),
+                    ],
+                  ),
+                  child: Column(
+                    children: [
+                      const SizedBox(
+                        width: 40,
+                        height: 40,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3.5,
+                          color: AppColors.borderBlack,
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      const Text(
+                        'AI sedang membaca struk...',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w900,
+                          fontSize: 14,
+                          color: AppColors.textBlack,
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Mohon tunggu, proses ini memerlukan beberapa detik',
+                        textAlign: TextAlign.center,
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 12,
+                          color: AppColors.textBlack.withValues(alpha: 0.5),
+                        ),
+                      ),
+                      const SizedBox(height: 14),
+                      // Shimmer rows
+                      _ShimmerBar(width: double.infinity, height: 12),
+                      const SizedBox(height: 8),
+                      _ShimmerBar(width: 200, height: 12),
+                      const SizedBox(height: 8),
+                      _ShimmerBar(width: 160, height: 12),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 16),
+              ],
+
+              // ── Error State ──────────────────────────────────────────────
+              if (_errorMessage != null && !aiProv.isProcessing) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.all(14),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFFFE4E6),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: AppColors.dangerRed, width: 1.8),
+                  ),
+                  child: Row(
+                    children: [
+                      const Icon(Icons.error_outline_rounded,
+                          color: AppColors.dangerRed, size: 20),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: Text(
+                          _errorMessage!,
+                          style: const TextStyle(
+                            fontWeight: FontWeight.w700,
+                            fontSize: 12.5,
+                            color: AppColors.dangerRed,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(height: 12),
+              ],
+
+              // ── Hasil Ekstraksi ──────────────────────────────────────────
+              if (aiProv.lastOCRResult != null && !aiProv.isProcessing) ...[
                 NeoCard(
                   backgroundColor: AppColors.cardWhite,
                   padding: const EdgeInsets.all(16),
@@ -232,7 +310,7 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
                             ),
                           ),
                           NeoBadge(
-                            text: 'Vision Verified',
+                            text: 'AI Verified',
                             backgroundColor: AppColors.mintGreen,
                             fontSize: 10,
                           ),
@@ -253,9 +331,9 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
                       ),
                       const SizedBox(height: 12),
 
-                      // Wallet Choice
+                      // Pilih Dompet
                       const Text(
-                        'Bayar Menggunakan Rekening:',
+                        'Bayar Menggunakan:',
                         style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13),
                       ),
                       const SizedBox(height: 8),
@@ -283,32 +361,33 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
                       ),
                       const SizedBox(height: 18),
 
-                      // Confirm & Save
+                      // Konfirmasi & Simpan
                       NeoButton(
                         label: _isSaving
                             ? 'Menyimpan...'
-                            : 'Konfirmasi & Masukkan ke Buku Kas',
+                            : 'Konfirmasi & Catat Transaksi',
                         icon: Icons.check_circle_outline,
                         backgroundColor: AppColors.mintGreen,
                         onPressed: _isSaving
                             ? null
                             : () async {
-                                final total = double.tryParse(_amountController
-                                        .text
-                                        .replaceAll('.', '')
-                                        .replaceAll(',', '')) ??
+                                final total = double.tryParse(
+                                        _amountController.text
+                                            .replaceAll('.', '')
+                                            .replaceAll(',', '')) ??
                                     0.0;
                                 if (total <= 0) return;
 
                                 final navigator = Navigator.of(context);
                                 final messenger = ScaffoldMessenger.of(context);
                                 setState(() => _isSaving = true);
+
                                 await txProv.addTransaction(
                                   walletId: _selectedWalletId,
                                   type: 'EXPENSE',
                                   amount: total,
                                   description: _merchantController.text.isNotEmpty
-                                      ? 'Belanja Struk: ${_merchantController.text}'
+                                      ? 'Struk: ${_merchantController.text}'
                                       : 'Belanja Struk Kasir',
                                   receiptImagePath: _capturedImagePath,
                                 );
@@ -335,8 +414,102 @@ class _CameraBillSnapModalState extends State<CameraBillSnapModal> {
                   ),
                 ),
               ],
+
+              // ── Empty State (belum ada foto) ─────────────────────────────
+              if (_capturedImagePath == null && !aiProv.isProcessing) ...[
+                Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 32),
+                  decoration: BoxDecoration(
+                    color: AppColors.cardWhite.withValues(alpha: 0.6),
+                    borderRadius: BorderRadius.circular(18),
+                    border: Border.all(
+                      color: AppColors.borderBlack.withValues(alpha: 0.3),
+                      width: 1.5,
+                    ),
+                  ),
+                  child: Column(
+                    children: [
+                      Icon(
+                        Icons.receipt_long_rounded,
+                        size: 48,
+                        color: AppColors.textMuted.withValues(alpha: 0.5),
+                      ),
+                      const SizedBox(height: 10),
+                      Text(
+                        'Belum ada foto struk',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w800,
+                          fontSize: 14,
+                          color: AppColors.textMuted.withValues(alpha: 0.7),
+                        ),
+                      ),
+                      const SizedBox(height: 4),
+                      Text(
+                        'Tap "Buka Kamera" atau "Dari Galeri" di atas',
+                        style: TextStyle(
+                          fontWeight: FontWeight.w600,
+                          fontSize: 11.5,
+                          color: AppColors.textMuted.withValues(alpha: 0.5),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ],
+
+              const SizedBox(height: 8),
             ],
           ),
+        ),
+      ),
+    );
+  }
+}
+
+// ── Shimmer Bar Widget ─────────────────────────────────────────────────────────
+class _ShimmerBar extends StatefulWidget {
+  final double width;
+  final double height;
+  const _ShimmerBar({required this.width, required this.height});
+
+  @override
+  State<_ShimmerBar> createState() => _ShimmerBarState();
+}
+
+class _ShimmerBarState extends State<_ShimmerBar>
+    with SingleTickerProviderStateMixin {
+  late AnimationController _ctrl;
+  late Animation<double> _anim;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1100),
+    )..repeat(reverse: true);
+    _anim = Tween<double>(begin: 0.3, end: 1.0).animate(
+      CurvedAnimation(parent: _ctrl, curve: Curves.easeInOut),
+    );
+  }
+
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return AnimatedBuilder(
+      animation: _anim,
+      builder: (_, __) => Container(
+        width: widget.width,
+        height: widget.height,
+        decoration: BoxDecoration(
+          color: AppColors.borderBlack.withValues(alpha: 0.08 * _anim.value + 0.04),
+          borderRadius: BorderRadius.circular(6),
         ),
       ),
     );

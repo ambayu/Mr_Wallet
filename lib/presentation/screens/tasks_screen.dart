@@ -267,9 +267,25 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
 
     if (confirmed == true && mounted) {
       final txProv = Provider.of<TransactionProvider>(context, listen: false);
+
+      // Hitung tanggal penyelesaian agar sesuai dengan bulan & tahun yang sedang dibuka pengguna
+      final now = DateTime.now();
+      final targetDay = task.dueDate.day;
+      final daysInSelectedMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+      final safeDay = targetDay > daysInSelectedMonth ? daysInSelectedMonth : targetDay;
+      final effectiveCompletionDate = DateTime(
+        _selectedDate.year,
+        _selectedDate.month,
+        safeDay,
+        now.hour,
+        now.minute,
+        now.second,
+      );
+
       await taskProv.completeTaskWithFinancialAction(
         task: task,
         walletId: targetWalletId,
+        completionDate: effectiveCompletionDate,
       );
       if (!mounted) return;
       await walletProv.loadWallets();
@@ -298,15 +314,83 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
     final confirm = await showDialog<bool>(
       context: context,
       builder: (ctx) => AlertDialog(
-        title: const Text('Batalkan Status Selesai?'),
-        content: const Text(
-          'Saldo dompet akan dikembalikan seperti semula dan transaksi terkait akan dihapus.',
+        backgroundColor: AppColors.butterYellow,
+        shape: RoundedRectangleBorder(
+          borderRadius: BorderRadius.circular(22),
+          side: const BorderSide(color: AppColors.borderBlack, width: 2.2),
         ),
+        title: Row(
+          children: [
+            Container(
+              padding: const EdgeInsets.all(6),
+              decoration: BoxDecoration(
+                color: const Color(0xFFFFE4E6),
+                borderRadius: BorderRadius.circular(10),
+                border: Border.all(color: AppColors.borderBlack, width: 1.5),
+              ),
+              child: const Icon(Icons.warning_amber_rounded, color: AppColors.dangerRed, size: 20),
+            ),
+            const SizedBox(width: 10),
+            const Expanded(
+              child: Text(
+                'Batalkan Task?',
+                style: TextStyle(fontWeight: FontWeight.w900, fontSize: 16, color: AppColors.textBlack),
+              ),
+            ),
+          ],
+        ),
+        content: Text(
+          'Yakin ingin membatalkan status complete "${task.title}"?\n\nSaldo dompet akan dikembalikan seperti semula dan transaksi terkait akan dihapus.',
+          style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 13, height: 1.4, color: AppColors.textBlack),
+        ),
+        actionsPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         actions: [
-          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Batal')),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Ya, Batalkan', style: TextStyle(color: Colors.red)),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(ctx, false),
+                  child: Container(
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: AppColors.cardWhite,
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                      boxShadow: const [
+                        BoxShadow(color: AppColors.shadowBlack, offset: Offset(1.5, 1.5)),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'Batal',
+                      style: TextStyle(fontWeight: FontWeight.w800, fontSize: 13, color: AppColors.textBlack),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () => Navigator.pop(ctx, true),
+                  child: Container(
+                    height: 42,
+                    decoration: BoxDecoration(
+                      color: const Color(0xFFFFE4E6),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                      boxShadow: const [
+                        BoxShadow(color: AppColors.shadowBlack, offset: Offset(1.5, 1.5)),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: const Text(
+                      'Ya, Batalkan',
+                      style: TextStyle(fontWeight: FontWeight.w900, fontSize: 13, color: AppColors.dangerRed),
+                    ),
+                  ),
+                ),
+              ),
+            ],
           ),
         ],
       ),
@@ -378,18 +462,26 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       }
     }
 
-    // B. Masukkan SEMUA task tagihan yang aktif/belum dicek ke bulan & tahun ini
+    // B. Masukkan task tagihan yang aktif/pending sesuai aturan periode
     for (var task in taskProv.pendingExpenses) {
       final key = '${task.title}_${task.recurrence}';
       if (seenExpenseKeys.contains(key)) continue;
 
-      // Sesuaikan representasi tanggal jatuh tempo dengan bulan & tahun yang sedang dilihat
-      final daysInSelectedMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
-      final targetDay = task.dueDate.day > daysInSelectedMonth ? daysInSelectedMonth : task.dueDate.day;
-      final viewDueDate = DateTime(_selectedDate.year, _selectedDate.month, targetDay, task.dueDate.hour, task.dueDate.minute);
+      if (task.recurrence == 'NONE') {
+        // Task sekali: Hanya tampil tepat di bulan dan tahun jatuh temponya
+        if (task.dueDate.year == _selectedDate.year && task.dueDate.month == _selectedDate.month) {
+          filteredExpenses.add(task);
+          seenExpenseKeys.add(key);
+        }
+      } else {
+        // Task berulang (MONTHLY / WEEKLY): Muncul di SEMUA bulan bebas
+        final daysInSelectedMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+        final targetDay = task.dueDate.day > daysInSelectedMonth ? daysInSelectedMonth : task.dueDate.day;
+        final viewDueDate = DateTime(_selectedDate.year, _selectedDate.month, targetDay, task.dueDate.hour, task.dueDate.minute);
 
-      filteredExpenses.add(task.copyWith(dueDate: viewDueDate));
-      seenExpenseKeys.add(key);
+        filteredExpenses.add(task.copyWith(dueDate: viewDueDate));
+        seenExpenseKeys.add(key);
+      }
     }
 
     // 2. Gaji / Pemasukan pada bulan & tahun yang dipilih:
@@ -406,17 +498,26 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
       }
     }
 
-    // B. Masukkan SEMUA task pemasukan yang aktif/belum dicek ke bulan & tahun ini
+    // B. Masukkan task pemasukan yang aktif/pending sesuai aturan periode
     for (var task in taskProv.pendingIncomes) {
       final key = '${task.title}_${task.recurrence}';
       if (seenIncomeKeys.contains(key)) continue;
 
-      final daysInSelectedMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
-      final targetDay = task.dueDate.day > daysInSelectedMonth ? daysInSelectedMonth : task.dueDate.day;
-      final viewDueDate = DateTime(_selectedDate.year, _selectedDate.month, targetDay, task.dueDate.hour, task.dueDate.minute);
+      if (task.recurrence == 'NONE') {
+        // Task sekali: Hanya tampil tepat di bulan dan tahun jatuh temponya
+        if (task.dueDate.year == _selectedDate.year && task.dueDate.month == _selectedDate.month) {
+          filteredIncomes.add(task);
+          seenIncomeKeys.add(key);
+        }
+      } else {
+        // Task berulang (MONTHLY / WEEKLY): Muncul di SEMUA bulan bebas
+        final daysInSelectedMonth = DateTime(_selectedDate.year, _selectedDate.month + 1, 0).day;
+        final targetDay = task.dueDate.day > daysInSelectedMonth ? daysInSelectedMonth : task.dueDate.day;
+        final viewDueDate = DateTime(_selectedDate.year, _selectedDate.month, targetDay, task.dueDate.hour, task.dueDate.minute);
 
-      filteredIncomes.add(task.copyWith(dueDate: viewDueDate));
-      seenIncomeKeys.add(key);
+        filteredIncomes.add(task.copyWith(dueDate: viewDueDate));
+        seenIncomeKeys.add(key);
+      }
     }
 
     // 3. Filter Tab Laporan berdasarkan Bulan, Tahun, dan Jenis yang dipilih
@@ -1252,7 +1353,7 @@ class _TasksScreenState extends State<TasksScreen> with SingleTickerProviderStat
                     ),
                     child: Text(
                       isCompleted
-                          ? 'Selesai'
+                          ? 'Complete'
                           : (isIncome ? 'Cairkan' : 'Bayar'),
                       style: TextStyle(
                         fontSize: 9,

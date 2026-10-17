@@ -128,27 +128,24 @@ class _AITextModalState extends State<AITextModal> {
 
   Future<void> _toggleVoiceRecording() async {
     if (_isRecordingVoice) {
-      // Stop Recording & Send
+      // Stop Recording — ambil teks langsung dari STT native
       _recordingTimer?.cancel();
       setState(() {
         _isRecordingVoice = false;
         _isLoading = true;
       });
 
-      final audioPath = await AudioService.instance.stopRecording();
-      if (audioPath != null && audioPath.isNotEmpty) {
-        final transcribed = await AIService.instance.transcribeAudioFile(audioPath);
-        final finalText = transcribed.isNotEmpty
-            ? transcribed
-            : 'Catat pengeluaran atau pemasukan terbaru';
+      final transcribed = await AudioService.instance.stopRecordingAndGetText();
+      final finalText = transcribed.trim().isNotEmpty ? transcribed.trim() : '';
 
-        if (mounted) {
-          setState(() => _isLoading = false);
+      if (mounted) {
+        setState(() => _isLoading = false);
+        if (finalText.isNotEmpty) {
           await _handleSend(finalText);
-        }
-      } else {
-        if (mounted) {
-          setState(() => _isLoading = false);
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Tidak ada suara yang terdeteksi, coba lagi.')),
+          );
         }
       }
     } else {
@@ -279,7 +276,7 @@ class _AITextModalState extends State<AITextModal> {
       if (mounted) {
         final errorMsg = _ChatMessage(
           id: 'err_${DateTime.now().millisecondsSinceEpoch}',
-          text: 'Waduh, koneksi ke server Mr. Wallet bermasalah: $e. Coba cek internet atau ulangi lagi ya!',
+          text: 'Waduh, koneksi ke server AI bermasalah. Coba periksa koneksi internet atau ulangi beberapa saat lagi ya!',
           isUser: false,
         );
         setState(() {
@@ -872,7 +869,7 @@ class _AITextModalState extends State<AITextModal> {
                                 ),
                                 decoration: const InputDecoration(
                                   isDense: true,
-                                  hintText: 'Ketik transaksi, instruksi, atau rekam suara...',
+                                  hintText: 'Ketik transaksi atau tanya sesuatu...',
                                   hintStyle: TextStyle(
                                     fontSize: 12,
                                     color: AppColors.textMuted,

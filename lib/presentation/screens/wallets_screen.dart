@@ -8,6 +8,7 @@ import '../../data/models/savings_goal_model.dart';
 import '../../data/models/wallet_model.dart';
 import '../providers/savings_goal_provider.dart';
 import '../providers/wallet_provider.dart';
+import '../widgets/celebration/confetti_celebration_dialog.dart';
 import '../widgets/dialogs/add_funds_dialog.dart';
 import '../widgets/dialogs/add_savings_goal_dialog.dart';
 import '../widgets/dialogs/add_wallet_dialog.dart';
@@ -597,6 +598,40 @@ class WalletsScreen extends StatelessWidget {
                     color: AppColors.textBlack,
                   ),
                 ),
+                if (goal.progressPercent >= 100) ...[
+                  const SizedBox(width: 6),
+                  GestureDetector(
+                    onTap: () => ConfettiCelebrationDialog.show(
+                      context,
+                      title: goal.name,
+                      targetAmount: goal.targetAmount,
+                      walletName: goal.walletName,
+                    ),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                      decoration: BoxDecoration(
+                        color: AppColors.primaryYellow,
+                        borderRadius: BorderRadius.circular(6),
+                        border: Border.all(color: AppColors.borderBlack, width: 0.9),
+                      ),
+                      child: const Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Icon(Icons.celebration_rounded, size: 12, color: AppColors.textBlack),
+                          SizedBox(width: 3),
+                          Text(
+                            'Tercapai! 🎉',
+                            style: TextStyle(
+                              fontSize: 9.5,
+                              fontWeight: FontWeight.w900,
+                              color: AppColors.textBlack,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ],
               ],
             ),
             const SizedBox(height: 10),
@@ -685,6 +720,25 @@ class WalletsScreen extends StatelessWidget {
               ),
             ),
             const SizedBox(height: 20),
+            if (goal.progressPercent >= 100) ...[
+              NeoButton(
+                label: 'Lihat Selebrasi Konfetti! 🎉',
+                icon: Icons.celebration_rounded,
+                backgroundColor: AppColors.mintGreen,
+                textColor: AppColors.textBlack,
+                height: 44,
+                onPressed: () {
+                  Navigator.pop(ctx);
+                  ConfettiCelebrationDialog.show(
+                    context,
+                    title: goal.name,
+                    targetAmount: goal.targetAmount,
+                    walletName: goal.walletName,
+                  );
+                },
+              ),
+              const SizedBox(height: 12),
+            ],
             Row(
               children: [
                 Expanded(

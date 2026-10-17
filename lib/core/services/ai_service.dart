@@ -1,7 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
 import 'package:flutter/foundation.dart';
-import 'package:google_generative_ai/google_generative_ai.dart';
 import 'package:http/http.dart' as http;
 import 'package:shared_preferences/shared_preferences.dart';
 import '../../data/models/ai_parsed_result.dart';
@@ -17,30 +16,10 @@ class AIService {
   static const String _prefModel = 'ai_model_name';
   static const String _prefPromptHistory = 'ai_prompt_history_list';
 
-  GenerativeModel? _visionModel;
-
   AIService._internal();
 
   Future<void> initialize() async {
-    final apiKey = await getApiKey();
-    if (apiKey.isNotEmpty) {
-      _initGenerativeModels(apiKey);
-    }
-  }
-
-  void _initGenerativeModels(String apiKey) {
-    try {
-      _visionModel = GenerativeModel(
-        model: 'gemini-1.5-flash',
-        apiKey: apiKey,
-        generationConfig: GenerationConfig(
-          responseMimeType: 'application/json',
-          temperature: 0.1,
-        ),
-      );
-    } catch (e) {
-      debugPrint('Error init Gemini models: $e');
-    }
+    // Inisialisasi service — route9 HTTP digunakan untuk semua inferensi
   }
 
   Future<String> getApiKey() async {
@@ -57,7 +36,6 @@ class AIService {
   Future<void> setApiKey(String apiKey) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(_prefApiKey, apiKey);
-    _initGenerativeModels(apiKey);
   }
 
   Future<String> getBaseUrl() async {
@@ -189,6 +167,9 @@ class AIService {
             ],
             'temperature': 0.1,
           }),
+        ).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => throw Exception('Koneksi ke server AI timeout. Coba lagi.'),
         );
 
         if (response.statusCode == 200) {
@@ -326,6 +307,9 @@ Skema JSON yang WAJIB dipatuhi:
             'stream': false,
             'temperature': 0.3,
           }),
+        ).timeout(
+          const Duration(seconds: 30),
+          onTimeout: () => throw Exception('Koneksi ke server AI timeout. Coba lagi.'),
         );
 
         if (response.statusCode == 200) {
@@ -359,57 +343,102 @@ Skema JSON yang WAJIB dipatuhi:
   }
 
   // 2. Process Receipt Image / OCR Data into Structured Bill Details
+  // Menggunakan route9 HTTP endpoint (multimodal image_url) — tidak bergantung Gemini SDK key
   Future<OCRBillResult> parseBillReceipt({
     required String imagePath,
     String? rawOCRText,
   }) async {
-    final apiKey = await getApiKey();
+    try {
+      final imageFile = File(imagePath);
+      if (!await imageFile.exists()) return _parseReceiptOffline('');
 
-    if (apiKey.isNotEmpty && _visionModel != null) {
-      try {
-        final imageFile = File(imagePath);
-        if (await imageFile.exists()) {
-          final imageBytes = await imageFile.readAsBytes();
+      final imageBytes = await imageFile.readAsBytes();
+      final base64Image = base64Encode(imageBytes);
 
-          final prompt = '''
-Ekstrak informasi struk belanja ini menjadi format JSON deterministik:
-{
-  "merchant_name": "Nama Toko / Resto",
-  "date": "YYYY-MM-DDTHH:mm:ss",
-  "total_amount": 0,
-  "tax": 0,
-  "category": "Makanan & Kopi" | "Belanja" | "Transportasi" | "Tagihan & Listrik" | "Lain-lain",
-  "items": [
-    {
-      "name": "Nama Barang",
-      "price": 0,
-      "quantity": 1
-    }
-  ]
-}
-Teks Mentah dari OCR (jika ada): "$rawOCRText"
-''';
+      // Deteksi MIME type dari ekstensi file
+      final ext = imagePath.toLowerCase().split('.').last;
+      final mimeType = ext == 'png'
+          ? 'image/png'
+          : ext == 'webp'
+              ? 'image/webp'
+              : 'image/jpeg';
 
-          final content = [
-            Content.multi([
-              TextPart(prompt),
-              DataPart('image/jpeg', imageBytes),
-            ]),
-          ];
+      final apiKey = await getApiKey();
+      final baseUrl = await getBaseUrl();
+      final modelName = await getModel();
 
-          final response = await _visionModel!.generateContent(content);
-          final resText = response.text;
-          if (resText != null && resText.isNotEmpty) {
-            final decoded = jsonDecode(resText) as Map<String, dynamic>;
-            return OCRBillResult.fromJson(decoded, rawText: rawOCRText ?? '');
+      if (apiKey.isEmpty) return _parseReceiptOffline(rawOCRText ?? '');
+
+      final endpointUri = Uri.parse('$baseUrl/chat/completions');
+      final response = await http.post(
+        endpointUri,
+        headers: {
+          'Authorization': 'Bearer $apiKey',
+          'Content-Type': 'application/json',
+          'Accept': 'application/json',
+        },
+        body: jsonEncode({
+          'model': modelName,
+          'messages': [
+            {
+              'role': 'system',
+              'content':
+                  'Kamu adalah sistem OCR struk belanja. Baca gambar struk yang dikirim dan ekstrak datanya. Balas HANYA dengan JSON valid tanpa markdown, tanpa penjelasan.'
+            },
+            {
+              'role': 'user',
+              'content': [
+                {
+                  'type': 'text',
+                  'text':
+                      'Baca struk ini dan kembalikan JSON dengan format berikut persis:\n{"merchant_name":"Nama Toko","date":"YYYY-MM-DDTHH:mm:ss","total_amount":0,"tax":0,"category":"Makanan & Kopi","items":[{"name":"Nama Item","price":0,"quantity":1}]}'
+                },
+                {
+                  'type': 'image_url',
+                  'image_url': {
+                    'url': 'data:$mimeType;base64,$base64Image',
+                  }
+                }
+              ]
+            }
+          ],
+          'temperature': 0.1,
+          'max_tokens': 1024,
+        }),
+      ).timeout(
+        const Duration(seconds: 45),
+        onTimeout: () => throw Exception('Proses baca struk timeout. Coba lagi.'),
+      );
+
+      if (response.statusCode == 200) {
+        final resJson = jsonDecode(response.body) as Map<String, dynamic>;
+        final choices = resJson['choices'] as List<dynamic>?;
+        if (choices != null && choices.isNotEmpty) {
+          final content = choices.first['message']?['content'] as String?;
+          if (content != null && content.trim().isNotEmpty) {
+            // Bersihkan markdown jika ada
+            final cleaned = content
+                .trim()
+                .replaceAll(RegExp(r'^```json\s*', multiLine: true), '')
+                .replaceAll(RegExp(r'^```\s*', multiLine: true), '')
+                .replaceAll(RegExp(r'\s*```$', multiLine: true), '')
+                .trim();
+            try {
+              final decoded = jsonDecode(cleaned) as Map<String, dynamic>;
+              return OCRBillResult.fromJson(decoded, rawText: rawOCRText ?? '');
+            } catch (jsonErr) {
+              debugPrint('OCR JSON parse error: $jsonErr\nRaw: $cleaned');
+            }
           }
         }
-      } catch (e) {
-        debugPrint('Vision OCR error: $e');
+      } else {
+        debugPrint('OCR HTTP error ${response.statusCode}: ${response.body}');
       }
+    } catch (e) {
+      debugPrint('Vision OCR error: $e');
     }
 
-    // Fallback regex parser for offline / no-API key bill snap
+    // Fallback regex parser jika semua gagal
     return _parseReceiptOffline(rawOCRText ?? '');
   }
 

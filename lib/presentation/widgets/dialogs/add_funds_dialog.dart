@@ -5,6 +5,7 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/savings_goal_model.dart';
 import '../../providers/savings_goal_provider.dart';
+import '../celebration/confetti_celebration_dialog.dart';
 import '../neo_button.dart';
 import '../neo_text_field.dart';
 
@@ -77,18 +78,32 @@ class _AddFundsDialogState extends State<AddFundsDialog> {
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
+    final currentSaved = widget.goal.effectiveSavedAmount;
+    final isReachingGoal = !_isWithdraw && (currentSaved + amount) >= widget.goal.targetAmount;
+
     try {
       await provider.addFunds(widget.goal.id, _isWithdraw ? -amount : amount);
       if (mounted) {
         navigator.pop();
-        messenger.showSnackBar(
-          SnackBar(
-            content: Text(_isWithdraw
-                ? 'Dana berhasil ditarik 🤍'
-                : 'Dana berhasil ditambahkan! 🎉'),
-            backgroundColor: AppColors.textBlack,
-          ),
-        );
+        if (isReachingGoal) {
+          // Tampilkan perayaan konfetti jika tabungan mencapai 100%!
+          ConfettiCelebrationDialog.show(
+            context,
+            title: widget.goal.name,
+            targetAmount: widget.goal.targetAmount,
+            walletName: widget.goal.walletName,
+            subtitle: 'Hebat! Penambahan dana ini menggenapkan targetmu:',
+          );
+        } else {
+          messenger.showSnackBar(
+            SnackBar(
+              content: Text(_isWithdraw
+                  ? 'Dana berhasil ditarik 🤍'
+                  : 'Dana berhasil ditambahkan! 🎉'),
+              backgroundColor: AppColors.textBlack,
+            ),
+          );
+        }
       }
     } catch (e) {
       if (mounted) {

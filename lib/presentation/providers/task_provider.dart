@@ -111,11 +111,13 @@ class TaskProvider extends ChangeNotifier {
     required TaskModel task,
     required String walletId,
     double? customAmount,
+    DateTime? completionDate,
   }) async {
     await _taskRepository.executeTaskCompletion(
       task: task,
       walletId: walletId,
       customAmount: customAmount,
+      completionDate: completionDate,
     );
     await loadTasks();
   }
