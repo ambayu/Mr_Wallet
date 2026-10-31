@@ -318,41 +318,53 @@ class TransactionRepository {
     });
   }
 
-  // Analytics helper methods
-  Future<double> getSpendingForDateRange(DateTime start, DateTime end) async {
+  // Analytics helper methods with optional wallet filter
+  Future<double> getSpendingForDateRange(DateTime start, DateTime end, {String? walletId}) async {
     final db = await _appDatabase.database;
     final startStr = start.toIso8601String();
     final endStr = end.toIso8601String();
 
-    final result = await db.rawQuery('''
+    String query = '''
       SELECT SUM(amount) as total FROM transactions 
       WHERE type = 'EXPENSE' AND transaction_date >= ? AND transaction_date <= ?
-    ''', [startStr, endStr]);
+    ''';
+    final args = <dynamic>[startStr, endStr];
+    if (walletId != null && walletId.isNotEmpty) {
+      query += ' AND wallet_id = ?';
+      args.add(walletId);
+    }
 
+    final result = await db.rawQuery(query, args);
     final total = result.first['total'];
     return (total as num?)?.toDouble() ?? 0.0;
   }
 
-  Future<double> getIncomeForDateRange(DateTime start, DateTime end) async {
+  Future<double> getIncomeForDateRange(DateTime start, DateTime end, {String? walletId}) async {
     final db = await _appDatabase.database;
     final startStr = start.toIso8601String();
     final endStr = end.toIso8601String();
 
-    final result = await db.rawQuery('''
+    String query = '''
       SELECT SUM(amount) as total FROM transactions 
       WHERE type = 'INCOME' AND transaction_date >= ? AND transaction_date <= ?
-    ''', [startStr, endStr]);
+    ''';
+    final args = <dynamic>[startStr, endStr];
+    if (walletId != null && walletId.isNotEmpty) {
+      query += ' AND wallet_id = ?';
+      args.add(walletId);
+    }
 
+    final result = await db.rawQuery(query, args);
     final total = result.first['total'];
     return (total as num?)?.toDouble() ?? 0.0;
   }
 
-  Future<List<Map<String, dynamic>>> getCategorySpendingForDateRange(DateTime start, DateTime end) async {
+  Future<List<Map<String, dynamic>>> getCategorySpendingForDateRange(DateTime start, DateTime end, {String? walletId}) async {
     final db = await _appDatabase.database;
     final startStr = start.toIso8601String();
     final endStr = end.toIso8601String();
 
-    final result = await db.rawQuery('''
+    String query = '''
       SELECT 
         COALESCE(c.id, 'uncat') as id,
         COALESCE(c.name, 'Lain-lain') as name,
@@ -363,10 +375,18 @@ class TransactionRepository {
       FROM transactions t
       LEFT JOIN categories c ON t.category_id = c.id
       WHERE t.type = 'EXPENSE' AND t.transaction_date >= ? AND t.transaction_date <= ?
+    ''';
+    final args = <dynamic>[startStr, endStr];
+    if (walletId != null && walletId.isNotEmpty) {
+      query += ' AND t.wallet_id = ?';
+      args.add(walletId);
+    }
+    query += '''
       GROUP BY c.id, c.name, c.icon, c.color
       ORDER BY total_amount DESC
-    ''', [startStr, endStr]);
+    ''';
 
+    final result = await db.rawQuery(query, args);
     return result;
   }
 

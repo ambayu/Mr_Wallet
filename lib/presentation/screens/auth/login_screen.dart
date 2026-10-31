@@ -295,12 +295,20 @@ class _LoginScreenState extends State<LoginScreen> {
 
                       // Social Login Button: Masuk dengan Google
                       GestureDetector(
-                        onTap: () {
-                          ScaffoldMessenger.of(context).showSnackBar(
-                            const SnackBar(
-                              content: Text('Fitur Masuk dengan Google segera hadir! ✨'),
-                            ),
-                          );
+                        onTap: () async {
+                          setState(() => _isLoading = true);
+                          final authProv = Provider.of<AuthProvider>(context, listen: false);
+                          final success = await authProv.loginWithGoogle();
+                          if (mounted) {
+                            setState(() => _isLoading = false);
+                            if (success) {
+                              Navigator.pushAndRemoveUntil(
+                                context,
+                                MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+                                (route) => false,
+                              );
+                            }
+                          }
                         },
                         child: Container(
                           height: 52,
@@ -308,12 +316,12 @@ class _LoginScreenState extends State<LoginScreen> {
                           decoration: BoxDecoration(
                             color: Colors.white,
                             borderRadius: BorderRadius.circular(26),
-                            border: Border.all(color: const Color(0xFFE2E8F0), width: 1.8),
+                            border: Border.all(color: AppColors.borderBlack, width: 2),
                             boxShadow: const [
                               BoxShadow(
-                                color: Color(0x0A000000),
-                                offset: Offset(0, 2),
-                                blurRadius: 4,
+                                color: AppColors.shadowBlack,
+                                offset: Offset(2, 2.5),
+                                blurRadius: 0,
                               ),
                             ],
                           ),

@@ -1,10 +1,12 @@
 import 'package:fl_chart/fl_chart.dart';
 import 'package:flutter/material.dart';
+import 'package:intl/intl.dart';
 import 'package:provider/provider.dart';
 import '../../core/constants/app_assets.dart';
 import '../../core/constants/app_colors.dart';
 import '../../core/utils/currency_formatter.dart';
 import '../providers/transaction_provider.dart';
+import '../providers/wallet_provider.dart';
 import '../widgets/neo_card.dart';
 import '../widgets/neo_header_card.dart';
 
@@ -16,7 +18,12 @@ class TrackScreen extends StatefulWidget {
 }
 
 class _TrackScreenState extends State<TrackScreen> {
-  String _selectedPeriod = 'Bulan'; // 'Bulan', '3 Bulan', 'Tahun'
+  String _selectedPeriod = 'Bulan'; // 'Minggu', 'Bulan', '3 Bulan', 'Tahun', 'Kustom'
+  String? _selectedWalletId; // null = Semua Dompet
+  String _selectedFlowType = 'ALL'; // 'ALL', 'EXPENSE', 'INCOME'
+  DateTime? _customStartDate;
+  DateTime? _customEndDate;
+
   bool _isLoading = true;
   double _spending = 0.0;
   double _income = 0.0;
@@ -45,7 +52,12 @@ class _TrackScreenState extends State<TrackScreen> {
   Future<void> _loadData() async {
     setState(() => _isLoading = true);
     final txProv = Provider.of<TransactionProvider>(context, listen: false);
-    final data = await txProv.getAnalyticsForPeriod(_selectedPeriod);
+    final data = await txProv.getAnalyticsForPeriod(
+      _selectedPeriod,
+      walletId: _selectedWalletId,
+      customStart: _customStartDate,
+      customEnd: _customEndDate,
+    );
 
     if (mounted) {
       setState(() {
@@ -62,11 +74,38 @@ class _TrackScreenState extends State<TrackScreen> {
   }
 
   void _onPeriodChanged(String period) {
-    if (_selectedPeriod == period) return;
+    if (_selectedPeriod == period && period != 'Kustom') return;
     setState(() {
       _selectedPeriod = period;
     });
-    _loadData();
+    if (period == 'Kustom') {
+      _pickCustomDateRange();
+    } else {
+      _loadData();
+    }
+  }
+
+  Future<void> _pickCustomDateRange() async {
+    final now = DateTime.now();
+    final picked = await showDateRangePicker(
+      context: context,
+      firstDate: DateTime(2020),
+      lastDate: now,
+      initialDateRange: _customStartDate != null && _customEndDate != null
+          ? DateTimeRange(start: _customStartDate!, end: _customEndDate!)
+          : DateTimeRange(start: now.subtract(const Duration(days: 14)), end: now),
+    );
+
+    if (picked != null) {
+      setState(() {
+        _customStartDate = picked.start;
+        _customEndDate = picked.end;
+      });
+      _loadData();
+    } else if (_customStartDate == null) {
+      setState(() => _selectedPeriod = 'Bulan');
+      _loadData();
+    }
   }
 
   String _generateMrWalletTips() {
@@ -120,87 +159,210 @@ class _TrackScreenState extends State<TrackScreen> {
                   child: Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
-                      // 1. Period Selector
+                      // 1. Period Selector (Horizontal Scroll with Chips)
+                      SingleChildScrollView(
+                        scrollDirection: Axis.horizontal,
+                        child: Row(
+                          children: [
+                            _buildPeriodChip('Minggu', 'Minggu Ini'),
+                            const SizedBox(width: 8),
+                            _buildPeriodChip('Bulan', 'Bulan Ini'),
+                            const SizedBox(width: 8),
+                            _buildPeriodChip('3 Bulan', '3 Bulan'),
+                            const SizedBox(width: 8),
+                            _buildPeriodChip('Tahun', 'Tahun Ini'),
+                            const SizedBox(width: 8),
+                            _buildPeriodChip(
+                              'Kustom',
+                              _customStartDate != null && _customEndDate != null
+                                  ? '${DateFormat('d MMM').format(_customStartDate!)} - ${DateFormat('d MMM').format(_customEndDate!)}'
+                                  : 'Pilih Tanggal',
+                              icon: Icons.date_range_rounded,
+                            ),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(height: 12),
+
+                      // 2. Filter Dompet (Wallet Filter Dropdown & Chips)
+                      Consumer<WalletProvider>(
+                        builder: (context, wProv, _) {
+                          final wallets = wProv.wallets;
+                          return Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                            decoration: BoxDecoration(
+                              color: AppColors.cardWhite,
+                              borderRadius: BorderRadius.circular(16),
+                              border: Border.all(color: AppColors.borderBlack, width: 1.8),
+                              boxShadow: const [
+                                BoxShadow(
+                                  color: AppColors.shadowBlack,
+                                  offset: Offset(1.5, 2),
+                                  blurRadius: 0,
+                                ),
+                              ],
+                            ),
+                            child: Row(
+                              children: [
+                                const Icon(Icons.account_balance_wallet_rounded, size: 20, color: AppColors.textBlack),
+                                const SizedBox(width: 10),
+                                const Text(
+                                  'Sumber Kas:',
+                                  style: TextStyle(fontSize: 12.5, fontWeight: FontWeight.w800),
+                                ),
+                                const SizedBox(width: 10),
+                                Expanded(
+                                  child: DropdownButtonHideUnderline(
+                                    child: DropdownButton<String?>(
+                                      value: _selectedWalletId,
+                                      isExpanded: true,
+                                      icon: const Icon(Icons.keyboard_arrow_down_rounded, color: AppColors.textBlack),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w800,
+                                        color: AppColors.textBlack,
+                                      ),
+                                      items: [
+                                        const DropdownMenuItem<String?>(
+                                          value: null,
+                                          child: Text('Semua Dompet (Gabungan)'),
+                                        ),
+                                        ...wallets.map((w) => DropdownMenuItem<String?>(
+                                              value: w.id,
+                                              child: Text(w.name),
+                                            )),
+                                      ],
+                                      onChanged: (val) {
+                                        setState(() => _selectedWalletId = val);
+                                        _loadData();
+                                      },
+                                    ),
+                                  ),
+                                ),
+                              ],
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 12),
+
+                      // 3. Filter Arus Kas (Semua / Pengeluaran / Pemasukan)
                       Row(
                         children: [
-                          _buildPeriodPill('Bulan'),
+                          _buildFlowTypeChip('ALL', 'Semua Arus'),
                           const SizedBox(width: 8),
-                          _buildPeriodPill('3 Bulan'),
+                          _buildFlowTypeChip('EXPENSE', 'Hanya Pengeluaran'),
                           const SizedBox(width: 8),
-                          _buildPeriodPill('Tahun'),
+                          _buildFlowTypeChip('INCOME', 'Hanya Pemasukan'),
                         ],
                       ),
                       const SizedBox(height: 18),
 
-                      // 2. Pengeluaran Card
+                      // 2. Ringkasan Arus Kas Card
                       NeoCard(
                         backgroundColor: AppColors.cardWhite,
                         borderRadius: 22,
                         borderWidth: 1.8,
                         padding: const EdgeInsets.all(18),
-                        child: Row(
-                          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                        child: Column(
                           children: [
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
+                            Row(
+                              mainAxisAlignment: MainAxisAlignment.spaceBetween,
                               children: [
-                                Text(
-                                  'Pengeluaran ($_selectedPeriod)',
-                                  style: const TextStyle(
-                                    fontSize: 13,
-                                    fontWeight: FontWeight.w700,
-                                    color: AppColors.textMuted,
-                                  ),
-                                ),
-                                const SizedBox(height: 4),
-                                Text(
-                                  CurrencyFormatter.formatRupiah(_spending),
-                                  style: const TextStyle(
-                                    fontSize: 22,
-                                    fontWeight: FontWeight.w900,
-                                    color: AppColors.textBlack,
-                                  ),
-                                ),
-                                if (_income > 0) ...[
-                                  const SizedBox(height: 4),
-                                  Text(
-                                    'Pemasukan: ${CurrencyFormatter.formatRupiah(_income)}',
-                                    style: const TextStyle(
-                                      fontSize: 11.5,
-                                      fontWeight: FontWeight.w700,
-                                      color: Color(0xFF16A34A),
+                                Column(
+                                  crossAxisAlignment: CrossAxisAlignment.start,
+                                  children: [
+                                    Text(
+                                      _selectedFlowType == 'INCOME'
+                                          ? 'Total Pemasukan ($_selectedPeriod)'
+                                          : (_selectedFlowType == 'EXPENSE'
+                                              ? 'Total Pengeluaran ($_selectedPeriod)'
+                                              : 'Arus Kas Kasus ($_selectedPeriod)'),
+                                      style: const TextStyle(
+                                        fontSize: 13,
+                                        fontWeight: FontWeight.w700,
+                                        color: AppColors.textMuted,
+                                      ),
                                     ),
+                                    const SizedBox(height: 4),
+                                    Text(
+                                      _selectedFlowType == 'INCOME'
+                                          ? CurrencyFormatter.formatRupiah(_income)
+                                          : CurrencyFormatter.formatRupiah(_spending),
+                                      style: TextStyle(
+                                        fontSize: 22,
+                                        fontWeight: FontWeight.w900,
+                                        color: _selectedFlowType == 'INCOME' ? const Color(0xFF16A34A) : AppColors.textBlack,
+                                      ),
+                                    ),
+                                    if (_selectedFlowType == 'ALL') ...[
+                                      const SizedBox(height: 4),
+                                      Text(
+                                        'Pemasukan: ${CurrencyFormatter.formatRupiah(_income)}',
+                                        style: const TextStyle(
+                                          fontSize: 11.5,
+                                          fontWeight: FontWeight.w700,
+                                          color: Color(0xFF16A34A),
+                                        ),
+                                      ),
+                                    ],
+                                  ],
+                                ),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                                  decoration: BoxDecoration(
+                                    color: _growthPct > 0 ? AppColors.bubblePink : AppColors.mintGreen,
+                                    borderRadius: BorderRadius.circular(14),
+                                    border: Border.all(color: AppColors.borderBlack, width: 1.5),
                                   ),
-                                ],
+                                  child: Row(
+                                    mainAxisSize: MainAxisSize.min,
+                                    children: [
+                                      Icon(
+                                        _growthPct > 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
+                                        size: 14,
+                                        color: _growthPct > 0 ? AppColors.dangerRed : const Color(0xFF16A34A),
+                                      ),
+                                      const SizedBox(width: 2),
+                                      Text(
+                                        '${_growthPct.abs().toStringAsFixed(1)}%',
+                                        style: TextStyle(
+                                          fontSize: 12,
+                                          fontWeight: FontWeight.w900,
+                                          color: _growthPct > 0 ? AppColors.dangerRed : const Color(0xFF16A34A),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
                               ],
                             ),
-                            Container(
-                              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
-                              decoration: BoxDecoration(
-                                color: _growthPct > 0 ? AppColors.bubblePink : AppColors.mintGreen,
-                                borderRadius: BorderRadius.circular(14),
-                                border: Border.all(color: AppColors.borderBlack, width: 1.5),
+                            if (_selectedFlowType == 'ALL' && (_spending > 0 || _income > 0)) ...[
+                              const SizedBox(height: 14),
+                              ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: LinearProgressIndicator(
+                                  value: (_income + _spending) > 0 ? (_income / (_income + _spending)).clamp(0.0, 1.0) : 0.5,
+                                  minHeight: 8,
+                                  backgroundColor: AppColors.dangerRed.withValues(alpha: 0.2),
+                                  valueColor: const AlwaysStoppedAnimation<Color>(Color(0xFF16A34A)),
+                                ),
                               ),
-                              child: Row(
-                                mainAxisSize: MainAxisSize.min,
+                              const SizedBox(height: 6),
+                              Row(
+                                mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  Icon(
-                                    _growthPct > 0 ? Icons.arrow_upward_rounded : Icons.arrow_downward_rounded,
-                                    size: 14,
-                                    color: _growthPct > 0 ? AppColors.dangerRed : const Color(0xFF16A34A),
-                                  ),
-                                  const SizedBox(width: 2),
                                   Text(
-                                    '${_growthPct.abs().toStringAsFixed(1)}%',
-                                    style: TextStyle(
-                                      fontSize: 12,
-                                      fontWeight: FontWeight.w900,
-                                      color: _growthPct > 0 ? AppColors.dangerRed : const Color(0xFF16A34A),
-                                    ),
+                                    'Pemasukan (${(_income + _spending > 0 ? (_income / (_income + _spending) * 100).toInt() : 0)}%)',
+                                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: Color(0xFF16A34A)),
+                                  ),
+                                  Text(
+                                    'Pengeluaran (${(_income + _spending > 0 ? (_spending / (_income + _spending) * 100).toInt() : 0)}%)',
+                                    style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w800, color: AppColors.dangerRed),
                                   ),
                                 ],
                               ),
-                            ),
+                            ],
                           ],
                         ),
                       ),
@@ -415,17 +577,64 @@ class _TrackScreenState extends State<TrackScreen> {
     );
   }
 
-  Widget _buildPeriodPill(String label) {
-    final isSelected = _selectedPeriod == label;
+  Widget _buildPeriodChip(String id, String label, {IconData? icon}) {
+    final isSelected = _selectedPeriod == id;
+    return GestureDetector(
+      onTap: () => _onPeriodChanged(id),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          color: isSelected ? AppColors.lavenderPurple : AppColors.cardWhite,
+          borderRadius: BorderRadius.circular(18),
+          border: Border.all(color: AppColors.borderBlack, width: 1.8),
+          boxShadow: isSelected
+              ? const [
+                  BoxShadow(
+                    color: AppColors.shadowBlack,
+                    offset: Offset(1.5, 2),
+                    blurRadius: 0,
+                  ),
+                ]
+              : null,
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (icon != null) ...[
+              Icon(icon, size: 14, color: AppColors.textBlack),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 12.5,
+                fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
+                color: AppColors.textBlack,
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildFlowTypeChip(String type, String label) {
+    final isSelected = _selectedFlowType == type;
     return Expanded(
       child: GestureDetector(
-        onTap: () => _onPeriodChanged(label),
+        onTap: () => setState(() => _selectedFlowType = type),
         child: Container(
           padding: const EdgeInsets.symmetric(vertical: 8),
           decoration: BoxDecoration(
-            color: isSelected ? AppColors.lavenderPurple : AppColors.cardWhite,
-            borderRadius: BorderRadius.circular(18),
-            border: Border.all(color: AppColors.borderBlack, width: 1.8),
+            color: isSelected
+                ? (type == 'EXPENSE'
+                    ? AppColors.bubblePink
+                    : type == 'INCOME'
+                        ? AppColors.mintGreen
+                        : AppColors.primaryYellow)
+                : AppColors.cardWhite,
+            borderRadius: BorderRadius.circular(14),
+            border: Border.all(color: AppColors.borderBlack, width: 1.6),
             boxShadow: isSelected
                 ? const [
                     BoxShadow(
@@ -439,8 +648,9 @@ class _TrackScreenState extends State<TrackScreen> {
           child: Center(
             child: Text(
               label,
+              textAlign: TextAlign.center,
               style: TextStyle(
-                fontSize: 12.5,
+                fontSize: 11,
                 fontWeight: isSelected ? FontWeight.w900 : FontWeight.w700,
                 color: AppColors.textBlack,
               ),

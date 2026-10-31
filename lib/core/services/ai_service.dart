@@ -194,6 +194,7 @@ class AIService {
     List<String> availableWallets = const ['Dompet Tunai', 'ATM BCA', 'ATM Mandiri', 'GoPay / E-Wallet'],
     List<String> availableCategories = const ['Makan', 'Minum', 'Belanja', 'Bensin', 'Listrik', 'Pulsa', 'Gaji', 'Transfer'],
     String? financialContext,
+    List<Map<String, String>>? conversationHistory,
   }) async {
     final trimmed = userInput.trim();
     if (trimmed.isEmpty) {
@@ -302,6 +303,11 @@ Skema JSON yang WAJIB dipatuhi:
             'model': modelName,
             'messages': [
               {'role': 'system', 'content': systemPrompt},
+              if (conversationHistory != null && conversationHistory.isNotEmpty)
+                ...conversationHistory.map((m) => {
+                      'role': m['role'] ?? 'user',
+                      'content': m['content'] ?? '',
+                    }),
               {'role': 'user', 'content': clean},
             ],
             'stream': false,

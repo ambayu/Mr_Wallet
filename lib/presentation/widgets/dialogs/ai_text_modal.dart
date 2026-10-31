@@ -248,11 +248,25 @@ class _AITextModalState extends State<AITextModal> {
           '- Rincian Pemasukan (${incomeDetails.length} transaksi):\n'
           '  ${incomeDetails.isEmpty ? "Belum ada pemasukan" : incomeDetails.join("\n  ")}';
 
+      // Siapkan riwayat obrolan sebelumnya untuk konteks percakapan multi-turn
+      final history = <Map<String, String>>[];
+      for (final msg in _messages) {
+        if (msg.id == 'welcome') continue; // Lewati greeting awal
+        if (msg.text.trim().isEmpty) continue;
+        history.add({
+          'role': msg.isUser ? 'user' : 'assistant',
+          'content': msg.text,
+        });
+      }
+      // Ambil maksimal 8 percakapan terakhir agar prompt tetap efisien & cepat
+      final recentHistory = history.length > 8 ? history.sublist(history.length - 8) : history;
+
       final result = await AIService.instance.parseNaturalCommand(
         userInput: clean,
         availableWallets: walletNames,
         availableCategories: categoryNames,
         financialContext: financialContext,
+        conversationHistory: recentHistory,
       );
 
       final aiMsgId = 'ai_${DateTime.now().millisecondsSinceEpoch}';

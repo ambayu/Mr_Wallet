@@ -4,6 +4,7 @@ import '../../data/repositories/wallet_repository.dart';
 
 class WalletProvider extends ChangeNotifier {
   final WalletRepository _walletRepository;
+  VoidCallback? onWalletDataChanged;
 
   List<WalletModel> _wallets = [];
   double _totalBalance = 0.0;
@@ -43,6 +44,7 @@ class WalletProvider extends ChangeNotifier {
     } finally {
       _isLoading = false;
       notifyListeners();
+      onWalletDataChanged?.call();
     }
   }
 

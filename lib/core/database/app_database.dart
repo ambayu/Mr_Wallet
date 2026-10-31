@@ -270,6 +270,37 @@ class AppDatabase {
     }
   }
 
+  /// Reset total data: mengosongkan seluruh tabel dan mengembalikan dompet & kategori default
+  Future<void> resetAllData() async {
+    final db = await database;
+    await db.transaction((txn) async {
+      await txn.delete('tasks');
+      await txn.delete('transactions');
+      await txn.delete('savings_goals');
+      await txn.delete('categories');
+      await txn.delete('wallets');
+
+      // Masukkan dompet awal
+      await txn.insert('wallets', {
+        'id': 'w_cash_default',
+        'name': 'Dompet Tunai',
+        'type': 'CASH',
+        'balance': 0.0,
+        'icon': 'account_balance_wallet',
+        'color': '#FFE873',
+        'is_default': 1,
+        'created_at': DateTime.now().toIso8601String(),
+      });
+
+      // Masukkan kategori bawaan
+      final batch = txn.batch();
+      for (final cat in defaultCategoriesList) {
+        batch.insert('categories', cat);
+      }
+      await batch.commit(noResult: true);
+    });
+  }
+
   /// Katalog Kategori Default Lengkap (Sederhana 1 Kata & Terstruktur Berdasarkan Prioritas).
   static const List<Map<String, dynamic>> defaultCategoriesList = [
     // --- 1. Kebutuhan Pokok & Harian (Prioritas Utama) ---

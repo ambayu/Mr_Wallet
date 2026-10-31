@@ -103,4 +103,45 @@ class AuthProvider extends ChangeNotifier {
     await prefs.setBool(_isLoggedInKey, false);
     notifyListeners();
   }
+
+  Future<bool> loginWithGoogle({
+    String? mockName,
+    String? mockEmail,
+  }) async {
+    final prefs = await SharedPreferences.getInstance();
+    final name = mockName?.isNotEmpty == true ? mockName! : 'Pengguna Google';
+    final email = mockEmail?.isNotEmpty == true ? mockEmail! : 'user.google@gmail.com';
+
+    _currentUser = UserModel(
+      username: name,
+      email: email,
+      pin: '1234',
+      avatar: 'mascot_selfie',
+    );
+    _isLoggedIn = true;
+
+    await prefs.setBool(_isLoggedInKey, true);
+    await prefs.setString(_userKey, jsonEncode(_currentUser!.toMap()));
+    notifyListeners();
+    return true;
+  }
+
+  Future<void> updateProfile({
+    String? username,
+    String? email,
+    String? avatar,
+    String? pin,
+  }) async {
+    if (_currentUser == null) return;
+    _currentUser = UserModel(
+      username: username ?? _currentUser!.username,
+      email: email ?? _currentUser!.email,
+      pin: pin ?? _currentUser!.pin,
+      avatar: avatar ?? _currentUser!.avatar,
+    );
+
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(_userKey, jsonEncode(_currentUser!.toMap()));
+    notifyListeners();
+  }
 }

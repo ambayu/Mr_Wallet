@@ -5,6 +5,8 @@ import '../../../core/constants/app_colors.dart';
 import '../../../core/utils/currency_formatter.dart';
 import '../../../data/models/savings_goal_model.dart';
 import '../../providers/savings_goal_provider.dart';
+import '../../providers/transaction_provider.dart';
+import '../../providers/wallet_provider.dart';
 import '../celebration/confetti_celebration_dialog.dart';
 import '../neo_button.dart';
 import '../neo_text_field.dart';
@@ -32,10 +34,13 @@ class _AddFundsDialogState extends State<AddFundsDialog> {
   final NumberFormat _currencyFormat = NumberFormat('#,###', 'id_ID');
   bool _isWithdraw = false;
   bool _isSaving = false;
+  bool _syncWithWallet = true;
+  String? _selectedWalletId;
 
   @override
   void initState() {
     super.initState();
+    _selectedWalletId = widget.goal.walletId;
     _amountController.addListener(() {
       if (mounted) setState(() {});
     });
@@ -75,6 +80,8 @@ class _AddFundsDialogState extends State<AddFundsDialog> {
 
     setState(() => _isSaving = true);
     final provider = Provider.of<SavingsGoalProvider>(context, listen: false);
+    final walletProv = Provider.of<WalletProvider>(context, listen: false);
+    final txProv = Provider.of<TransactionProvider>(context, listen: false);
     final navigator = Navigator.of(context);
     final messenger = ScaffoldMessenger.of(context);
 
@@ -82,11 +89,35 @@ class _AddFundsDialogState extends State<AddFundsDialog> {
     final isReachingGoal = !_isWithdraw && (currentSaved + amount) >= widget.goal.targetAmount;
 
     try {
+      // 1. Update dana tabungan
       await provider.addFunds(widget.goal.id, _isWithdraw ? -amount : amount);
+
+      // 2. Jika sinkronisasi dompet aktif & dompet dipilih, catat mutasi di dompet
+      if (_syncWithWallet && _selectedWalletId != null) {
+        if (!_isWithdraw) {
+          // Menabung: kurangi saldo dompet (pengeluaran / alokasi tabungan)
+          await txProv.addTransaction(
+            walletId: _selectedWalletId!,
+            type: 'EXPENSE',
+            amount: amount,
+            description: 'Tabungan: ${widget.goal.name}',
+          );
+        } else {
+          // Tarik: masukkan kembali ke dompet (pemasukan tabungan)
+          await txProv.addTransaction(
+            walletId: _selectedWalletId!,
+            type: 'INCOME',
+            amount: amount,
+            description: 'Tarik Tabungan: ${widget.goal.name}',
+          );
+        }
+        await walletProv.loadWallets();
+        await provider.loadGoals();
+      }
+
       if (mounted) {
         navigator.pop();
         if (isReachingGoal) {
-          // Tampilkan perayaan konfetti jika tabungan mencapai 100%!
           ConfettiCelebrationDialog.show(
             context,
             title: widget.goal.name,
@@ -246,6 +277,74 @@ class _AddFundsDialogState extends State<AddFundsDialog> {
                   keyboardType: TextInputType.number,
                   prefixIcon: Icons.attach_money_rounded,
                   onChanged: _onAmountChanged,
+                ),
+                const SizedBox(height: 14),
+
+                // Pilihan Sinkronisasi Saldo Dompet Riil
+                Consumer<WalletProvider>(
+                  builder: (context, wProv, _) {
+                    final wallets = wProv.wallets;
+                    if (wallets.isEmpty) return const SizedBox.shrink();
+                    _selectedWalletId ??= wallets.first.id;
+
+                    return Container(
+                      padding: const EdgeInsets.all(12),
+                      decoration: BoxDecoration(
+                        color: AppColors.cardWhite,
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: AppColors.borderBlack, width: 1.6),
+                      ),
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Row(
+                            children: [
+                              Checkbox(
+                                value: _syncWithWallet,
+                                activeColor: AppColors.textBlack,
+                                onChanged: (v) => setState(() => _syncWithWallet = v ?? true),
+                              ),
+                              Expanded(
+                                child: Text(
+                                  _isWithdraw ? 'Setor balik ke saldo dompet' : 'Potong langsung dari dompet riil',
+                                  style: const TextStyle(
+                                    fontSize: 12.5,
+                                    fontWeight: FontWeight.w800,
+                                    color: AppColors.textBlack,
+                                  ),
+                                ),
+                              ),
+                            ],
+                          ),
+                          if (_syncWithWallet) ...[
+                            const SizedBox(height: 6),
+                            DropdownButtonFormField<String>(
+                              value: _selectedWalletId,
+                              decoration: InputDecoration(
+                                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                                filled: true,
+                                fillColor: AppColors.pillGray,
+                                border: OutlineInputBorder(
+                                  borderRadius: BorderRadius.circular(12),
+                                  borderSide: const BorderSide(color: AppColors.borderBlack, width: 1.5),
+                                ),
+                              ),
+                              items: wallets.map((w) {
+                                return DropdownMenuItem(
+                                  value: w.id,
+                                  child: Text(
+                                    '${w.name} (${CurrencyFormatter.formatRupiah(w.balance)})',
+                                    style: const TextStyle(fontSize: 12.5, fontWeight: FontWeight.w700),
+                                  ),
+                                );
+                              }).toList(),
+                              onChanged: (val) => setState(() => _selectedWalletId = val),
+                            ),
+                          ],
+                        ],
+                      ),
+                    );
+                  },
                 ),
                 const SizedBox(height: 24),
 

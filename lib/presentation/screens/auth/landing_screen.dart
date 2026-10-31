@@ -1,6 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:provider/provider.dart';
 import '../../../core/constants/app_assets.dart';
 import '../../../core/constants/app_colors.dart';
+import '../../providers/auth_provider.dart';
+import '../main_navigation_screen.dart';
 import 'login_screen.dart';
 import 'register_screen.dart';
 
@@ -60,15 +63,74 @@ class _LandingScreenState extends State<LandingScreen> {
             mainAxisSize: MainAxisSize.min,
             children: [
               _buildLoginButton(context),
-              const SizedBox(height: 12),
+              const SizedBox(height: 10),
+              _buildGoogleButton(context),
+              const SizedBox(height: 10),
               _buildRegisterButton(context),
-              const SizedBox(height: 18),
+              const SizedBox(height: 16),
               _buildDotsIndicator(),
               const SizedBox(height: 12),
             ],
           ),
         ),
       ],
+    );
+  }
+
+  Widget _buildGoogleButton(BuildContext context, {double height = 52}) {
+    return GestureDetector(
+      onTap: () async {
+        final authProv = Provider.of<AuthProvider>(context, listen: false);
+        final success = await authProv.loginWithGoogle();
+        if (context.mounted && success) {
+          Navigator.pushAndRemoveUntil(
+            context,
+            MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
+            (route) => false,
+          );
+        }
+      },
+      child: Container(
+        height: height,
+        width: double.infinity,
+        decoration: BoxDecoration(
+          color: Colors.white,
+          borderRadius: BorderRadius.circular(30),
+          border: Border.all(
+            color: const Color(0xFF1E1E24),
+            width: 2.5,
+          ),
+          boxShadow: const [
+            BoxShadow(
+              color: Color(0xFF1E1E24),
+              offset: Offset(2, 2.5),
+              blurRadius: 0,
+            ),
+          ],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: const [
+            Text(
+              'G',
+              style: TextStyle(
+                fontSize: 22,
+                fontWeight: FontWeight.w900,
+                color: Color(0xFFEA4335),
+              ),
+            ),
+            SizedBox(width: 8),
+            Text(
+              'Masuk dengan Google',
+              style: TextStyle(
+                fontSize: 14.5,
+                fontWeight: FontWeight.w800,
+                color: AppColors.textBlack,
+              ),
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -90,9 +152,11 @@ class _LandingScreenState extends State<LandingScreen> {
                     Row(
                       mainAxisAlignment: MainAxisAlignment.center,
                       children: [
-                        Expanded(child: _buildLoginButton(context, height: 48)),
-                        const SizedBox(width: 12),
-                        Expanded(child: _buildRegisterButton(context, height: 48)),
+                        Expanded(child: _buildLoginButton(context, height: 46)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _buildGoogleButton(context, height: 46)),
+                        const SizedBox(width: 8),
+                        Expanded(child: _buildRegisterButton(context, height: 46)),
                       ],
                     ),
                     const SizedBox(height: 10),

@@ -43,13 +43,19 @@ class SmartFlowApp extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final savingsGoalProvider = SavingsGoalProvider()..loadGoals();
+    final walletProvider = WalletProvider()..loadWallets();
+    walletProvider.onWalletDataChanged = () {
+      savingsGoalProvider.loadGoals();
+    };
+
     return MultiProvider(
       providers: [
         ChangeNotifierProvider(
           create: (_) => AuthProvider()..checkAuthStatus(),
         ),
-        ChangeNotifierProvider(
-          create: (_) => WalletProvider()..loadWallets(),
+        ChangeNotifierProvider.value(
+          value: walletProvider,
         ),
         ChangeNotifierProvider(
           create: (_) => TransactionProvider()..loadInitialData(),
@@ -57,8 +63,8 @@ class SmartFlowApp extends StatelessWidget {
         ChangeNotifierProvider(
           create: (_) => TaskProvider()..loadTasks(),
         ),
-        ChangeNotifierProvider(
-          create: (_) => SavingsGoalProvider()..loadGoals(),
+        ChangeNotifierProvider.value(
+          value: savingsGoalProvider,
         ),
         ChangeNotifierProvider(
           create: (_) => AIProvider(),

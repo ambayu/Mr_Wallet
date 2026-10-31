@@ -60,7 +60,12 @@ class TransactionProvider extends ChangeNotifier {
     return await _transactionRepository.getTransactionsByMonth(month);
   }
 
-  Future<Map<String, dynamic>> getAnalyticsForPeriod(String period) async {
+  Future<Map<String, dynamic>> getAnalyticsForPeriod(
+    String period, {
+    String? walletId,
+    DateTime? customStart,
+    DateTime? customEnd,
+  }) async {
     final now = DateTime.now();
     DateTime start;
     DateTime end = DateTime(now.year, now.month, now.day, 23, 59, 59);
@@ -68,7 +73,14 @@ class TransactionProvider extends ChangeNotifier {
     DateTime prevStart;
     DateTime prevEnd;
 
-    if (period == '3 Bulan') {
+    if (period == 'Minggu') {
+      // 7 hari terakhir
+      start = now.subtract(const Duration(days: 6));
+      start = DateTime(start.year, start.month, start.day, 0, 0, 0);
+      prevEnd = start.subtract(const Duration(seconds: 1));
+      prevStart = prevEnd.subtract(const Duration(days: 6));
+      prevStart = DateTime(prevStart.year, prevStart.month, prevStart.day, 0, 0, 0);
+    } else if (period == '3 Bulan') {
       start = DateTime(now.year, now.month - 2, 1);
       prevStart = DateTime(now.year, now.month - 5, 1);
       prevEnd = DateTime(now.year, now.month - 2, 0, 23, 59, 59);
@@ -76,6 +88,12 @@ class TransactionProvider extends ChangeNotifier {
       start = DateTime(now.year, 1, 1);
       prevStart = DateTime(now.year - 1, 1, 1);
       prevEnd = DateTime(now.year - 1, 12, 31, 23, 59, 59);
+    } else if (period == 'Kustom' && customStart != null && customEnd != null) {
+      start = DateTime(customStart.year, customStart.month, customStart.day, 0, 0, 0);
+      end = DateTime(customEnd.year, customEnd.month, customEnd.day, 23, 59, 59);
+      final duration = end.difference(start);
+      prevEnd = start.subtract(const Duration(seconds: 1));
+      prevStart = prevEnd.subtract(duration);
     } else {
       // 'Bulan'
       start = DateTime(now.year, now.month, 1);
@@ -83,11 +101,11 @@ class TransactionProvider extends ChangeNotifier {
       prevEnd = DateTime(now.year, now.month, 0, 23, 59, 59);
     }
 
-    final spending = await _transactionRepository.getSpendingForDateRange(start, end);
-    final income = await _transactionRepository.getIncomeForDateRange(start, end);
-    final categories = await _transactionRepository.getCategorySpendingForDateRange(start, end);
+    final spending = await _transactionRepository.getSpendingForDateRange(start, end, walletId: walletId);
+    final income = await _transactionRepository.getIncomeForDateRange(start, end, walletId: walletId);
+    final categories = await _transactionRepository.getCategorySpendingForDateRange(start, end, walletId: walletId);
 
-    final prevSpending = await _transactionRepository.getSpendingForDateRange(prevStart, prevEnd);
+    final prevSpending = await _transactionRepository.getSpendingForDateRange(prevStart, prevEnd, walletId: walletId);
 
     double growthPct = 0.0;
     if (prevSpending > 0) {
@@ -102,6 +120,8 @@ class TransactionProvider extends ChangeNotifier {
       'prevSpending': prevSpending,
       'growthPercentage': growthPct,
       'categories': categories,
+      'startDate': start,
+      'endDate': end,
     };
   }
 
