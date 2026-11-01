@@ -111,12 +111,16 @@ class HomeScreen extends StatelessWidget {
                     // Avatar Crab Mascot
                     GestureDetector(
                       onTap: () {
-                        Navigator.push(
-                          context,
-                          MaterialPageRoute(
-                            builder: (_) => const SettingsScreen(),
-                          ),
-                        );
+                        if (onNavigateTab != null) {
+                          onNavigateTab!(4);
+                        } else {
+                          Navigator.push(
+                            context,
+                            MaterialPageRoute(
+                              builder: (_) => const SettingsScreen(),
+                            ),
+                          );
+                        }
                       },
                       child: Container(
                         width: 52,

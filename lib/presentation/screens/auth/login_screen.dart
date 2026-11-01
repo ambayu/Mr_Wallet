@@ -298,12 +298,12 @@ class _LoginScreenState extends State<LoginScreen> {
                         onTap: () async {
                           setState(() => _isLoading = true);
                           final authProv = Provider.of<AuthProvider>(context, listen: false);
+                          final nav = Navigator.of(context);
                           final success = await authProv.loginWithGoogle();
                           if (mounted) {
                             setState(() => _isLoading = false);
                             if (success) {
-                              Navigator.pushAndRemoveUntil(
-                                context,
+                              nav.pushAndRemoveUntil(
                                 MaterialPageRoute(builder: (_) => const MainNavigationScreen()),
                                 (route) => false,
                               );

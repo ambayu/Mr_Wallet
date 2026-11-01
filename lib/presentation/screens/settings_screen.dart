@@ -373,6 +373,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
   }
 
   Future<void> _confirmFactoryReset(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final walletProv = Provider.of<WalletProvider>(context, listen: false);
+    final txProv = Provider.of<TransactionProvider>(context, listen: false);
+    final goalProv = Provider.of<SavingsGoalProvider>(context, listen: false);
+    final taskProv = Provider.of<TaskProvider>(context, listen: false);
+
     final confirmed = await showDialog<bool>(
       context: context,
       builder: (ctx) {
@@ -420,19 +426,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       },
     );
 
-    if (confirmed == true && context.mounted) {
-      final nav = Navigator.of(context);
-      final messenger = ScaffoldMessenger.of(context);
-
+    if (confirmed == true && mounted) {
       // Eksekusi Factory Reset
       await AppDatabase.instance.resetAllData();
 
-      if (context.mounted) {
+      if (mounted) {
         // Refresh semua provider ke data awal
-        await Provider.of<WalletProvider>(context, listen: false).loadWallets();
-        await Provider.of<TransactionProvider>(context, listen: false).loadInitialData();
-        await Provider.of<SavingsGoalProvider>(context, listen: false).loadGoals();
-        await Provider.of<TaskProvider>(context, listen: false).loadTasks();
+        await walletProv.loadWallets();
+        await txProv.loadInitialData();
+        await goalProv.loadGoals();
+        await taskProv.loadTasks();
 
         messenger.showSnackBar(
           const SnackBar(

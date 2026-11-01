@@ -319,7 +319,7 @@ class _AddFundsDialogState extends State<AddFundsDialog> {
                           if (_syncWithWallet) ...[
                             const SizedBox(height: 6),
                             DropdownButtonFormField<String>(
-                              value: _selectedWalletId,
+                              initialValue: _selectedWalletId,
                               decoration: InputDecoration(
                                 contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                                 filled: true,
